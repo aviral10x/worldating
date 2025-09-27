@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { Compass, Users, Heart, MessageSquare, User } from "lucide-react";
+import { Compass, Users, Coins, MessageSquare, User } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 const items = [
   { label: "Dating", href: "/", icon: Compass },
   { label: "Users", href: "/users", icon: Users },
-  { label: "Like", href: "/likes", icon: Heart },
+  { label: "Likes", href: "/likes", icon: Coins },
   { label: "Messages", href: "/messages", icon: MessageSquare },
   { label: "Profile", href: "/profile", icon: User },
 ] as const;

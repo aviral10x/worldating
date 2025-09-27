@@ -1,6 +1,6 @@
 "use client";
 
-import { Heart, X, MapPin, MoreHorizontal } from "lucide-react";
+import { Coins, X, MapPin, MoreHorizontal } from "lucide-react";
 import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
@@ -212,7 +212,7 @@ export const ProfileCard = ({ profiles, onLike }: { profiles?: Profile[]; onLike
           <div className="mt-4 sm:mt-5 grid grid-cols-2 gap-3">
             <button
               onClick={handleSkip}
-              className="flex items-center justify-center gap-2 py-3 rounded-xl border bg-[var(--card)] hover:bg-[var(--secondary)] transition-all"
+              className="flex items-center justify-center gap-2 py-3 rounded-xl border bg-[var(--card)] hover:bg-[var(--secondary)] transition-colors"
             >
               <X className="h-5 w-5 text-[var(--destructive)]" />
               <span className="font-medium">Skip</span>
@@ -221,8 +221,8 @@ export const ProfileCard = ({ profiles, onLike }: { profiles?: Profile[]; onLike
               onClick={handleLike}
               className="flex items-center justify-center gap-2 py-3 rounded-xl text-white bg-[var(--primary)] hover:brightness-105 active:scale-[0.98] transition-all"
             >
-              <Heart className="h-5 w-5" fill="currentColor" />
-              <span className="font-medium">Like</span>
+              <Coins className="h-5 w-5" />
+              <span className="font-medium">Stake</span>
             </button>
           </div>
         </div>

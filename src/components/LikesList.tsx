@@ -9,7 +9,7 @@ const likes = [
   { name: "Liam", img: "https://images.unsplash.com/photo-1547106634-56dcd53ae883?q=80&w=1974&auto=format&fit=crop", time: "2d" },
 ];
 
-export const LikesList = () => {
+export const LikesList = ({ onSelect }: { onSelect?: (name: string) => void }) => {
   return (
     <div className="soft-card">
       <div className="p-4 border-b border-[var(--border)]">
@@ -17,7 +17,11 @@ export const LikesList = () => {
       </div>
       <ul className="p-2">
         {likes.map((p) => (
-          <li key={p.name} className="flex items-center gap-3 p-2 rounded-xl hover:bg-[var(--secondary)] cursor-pointer">
+          <li
+            key={p.name}
+            className="flex items-center gap-3 p-2 rounded-xl hover:bg-[var(--secondary)] cursor-pointer"
+            onClick={() => onSelect?.(p.name)}
+          >
             <div className="relative h-10 w-10 rounded-xl overflow-hidden">
               <Image src={p.img} alt={p.name} fill className="object-cover" />
             </div>
@@ -26,8 +30,17 @@ export const LikesList = () => {
                 <span className="font-medium">{p.name}</span>
                 <span className="text-xs text-[var(--muted-foreground)]">{p.time}</span>
               </div>
-              <p className="text-xs text-[var(--muted-foreground)]">liked your profile</p>
+              <p className="text-xs text-[var(--muted-foreground)]">staked on you</p>
             </div>
+            <button
+              className="px-3 py-1 text-xs rounded-lg bg-[var(--primary)] text-white hover:brightness-105"
+              onClick={(e) => {
+                e.stopPropagation();
+                onSelect?.(p.name);
+              }}
+            >
+              Stake back
+            </button>
           </li>
         ))}
       </ul>
