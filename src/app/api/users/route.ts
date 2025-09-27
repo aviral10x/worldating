@@ -49,7 +49,7 @@ export async function POST(request: NextRequest) {
   try {
     const requestBody = await request.json();
     
-    const { name, age, location, bio, avatarUrl } = requestBody;
+    const { name, age, location, bio, avatarUrl, worldAddress, worldUsername } = requestBody;
     
     if (!name || typeof name !== 'string') {
       return NextResponse.json({ 
@@ -100,17 +100,52 @@ export async function POST(request: NextRequest) {
       }, { status: 400 });
     }
     
-    if (avatarUrl && avatarUrl.trim() && !isValidUrl(avatarUrl)) {
+    // Allow data URLs (data:image/*), root-relative uploads (/uploads/...), or full http(s) URLs
+    if (avatarUrl && avatarUrl.trim() && !isValidAvatarUrl(avatarUrl)) {
       return NextResponse.json({ 
-        error: 'Avatar URL must be a valid URL',
+        error: 'Avatar URL must be a valid image URL, data URL, or /uploads path',
         code: 'INVALID_URL_FORMAT'
       }, { status: 400 });
+    }
+
+    // Validate worldAddress and worldUsername
+    if (worldAddress !== undefined && worldAddress !== null && typeof worldAddress !== 'string') {
+      return NextResponse.json({ 
+        error: 'World address must be a string',
+        code: 'INVALID_WORLD_ADDRESS'
+      }, { status: 400 });
+    }
+
+    if (worldUsername !== undefined && worldUsername !== null && typeof worldUsername !== 'string') {
+      return NextResponse.json({ 
+        error: 'World username must be a string',
+        code: 'INVALID_WORLD_USERNAME'
+      }, { status: 400 });
+    }
+
+    let normalizedWorldAddress = null;
+    if (worldAddress && worldAddress.trim()) {
+      normalizedWorldAddress = worldAddress.trim().toLowerCase();
+      
+      // Check if worldAddress is already taken
+      const existingUser = await db.select()
+        .from(users)
+        .where(eq(users.worldAddress, normalizedWorldAddress))
+        .limit(1);
+      
+      if (existingUser.length > 0) {
+        return NextResponse.json({ 
+          error: 'World address is already taken',
+          code: 'WORLD_ADDRESS_TAKEN'
+        }, { status: 409 });
+      }
     }
     
     const trimmedName = name.trim();
     const trimmedLocation = location.trim();
     const trimmedBio = bio ? bio.trim() : null;
     const trimmedAvatarUrl = avatarUrl ? avatarUrl.trim() : null;
+    const trimmedWorldUsername = worldUsername ? worldUsername.trim() : null;
     
     const createdAt = Date.now();
     const updatedAt = createdAt;
@@ -121,6 +156,8 @@ export async function POST(request: NextRequest) {
       location: trimmedLocation,
       bio: trimmedBio,
       avatarUrl: trimmedAvatarUrl || null,
+      worldAddress: normalizedWorldAddress,
+      worldUsername: trimmedWorldUsername,
       createdAt: createdAt,
       updatedAt: updatedAt
     }).returning();
@@ -147,7 +184,7 @@ export async function PUT(request: NextRequest) {
     }
     
     const requestBody = await request.json();
-    const { name, age, location, bio, avatarUrl } = requestBody;
+    const { name, age, location, bio, avatarUrl, worldAddress, worldUsername } = requestBody;
     
     const updates: any = {};
     
@@ -204,13 +241,97 @@ export async function PUT(request: NextRequest) {
           code: 'INVALID_AVATAR_URL'
         }, { status: 400 });
       }
-      if (avatarUrl && avatarUrl.trim() && !isValidUrl(avatarUrl)) {
+      if (avatarUrl && avatarUrl.trim() && !isValidAvatarUrl(avatarUrl)) {
         return NextResponse.json({ 
-          error: 'Avatar URL must be a valid URL',
+          error: 'Avatar URL must be a valid image URL, data URL, or /uploads path',
           code: 'INVALID_URL_FORMAT'
         }, { status: 400 });
       }
       updates.avatarUrl = avatarUrl ? avatarUrl.trim() : null;
+    }
+
+    // Handle worldUsername updates
+    if (worldUsername !== undefined) {
+      if (worldUsername !== null && typeof worldUsername !== 'string') {
+        return NextResponse.json({ 
+          error: 'World username must be a string or null',
+          code: 'INVALID_WORLD_USERNAME'
+        }, { status: 400 });
+      }
+      updates.worldUsername = worldUsername ? worldUsername.trim() : null;
+    }
+
+    // Handle worldAddress updates with complex business logic
+    if (worldAddress !== undefined) {
+      if (worldAddress !== null && typeof worldAddress !== 'string') {
+        return NextResponse.json({ 
+          error: 'World address must be a string or null',
+          code: 'INVALID_WORLD_ADDRESS'
+        }, { status: 400 });
+      }
+
+      // Get current user to check existing worldAddress
+      const currentUser = await db.select()
+        .from(users)
+        .where(eq(users.id, parseInt(id)))
+        .limit(1);
+
+      if (currentUser.length === 0) {
+        return NextResponse.json({ 
+          error: 'User not found' 
+        }, { status: 404 });
+      }
+
+      const existingWorldAddress = currentUser[0].worldAddress;
+
+      if (worldAddress === null) {
+        // Disallow clearing worldAddress if it's currently not null
+        if (existingWorldAddress !== null) {
+          return NextResponse.json({ 
+            error: 'World address cannot be cleared once set',
+            code: 'WORLD_ADDRESS_IMMUTABLE'
+          }, { status: 400 });
+        }
+        updates.worldAddress = null;
+      } else {
+        const normalizedWorldAddress = worldAddress.trim().toLowerCase();
+        
+        // If user already has a worldAddress and trying to change to different one
+        if (existingWorldAddress !== null && existingWorldAddress !== normalizedWorldAddress) {
+          return NextResponse.json({ 
+            error: 'World address cannot be changed once set',
+            code: 'WORLD_ADDRESS_IMMUTABLE'
+          }, { status: 400 });
+        }
+
+        // If setting for first time or same address, check uniqueness
+        if (existingWorldAddress === null || existingWorldAddress === normalizedWorldAddress) {
+          const existingUser = await db.select()
+            .from(users)
+            .where(and(
+              eq(users.worldAddress, normalizedWorldAddress),
+              eq(users.id, parseInt(id))
+            ))
+            .limit(1);
+
+          // Check if another user has this address
+          if (existingWorldAddress === null) {
+            const otherUser = await db.select()
+              .from(users)
+              .where(eq(users.worldAddress, normalizedWorldAddress))
+              .limit(1);
+
+            if (otherUser.length > 0) {
+              return NextResponse.json({ 
+                error: 'World address is already taken',
+                code: 'WORLD_ADDRESS_TAKEN'
+              }, { status: 409 });
+            }
+          }
+
+          updates.worldAddress = normalizedWorldAddress;
+        }
+      }
     }
     
     if (Object.keys(updates).length === 0) {
@@ -283,4 +404,14 @@ function isValidUrl(string: string): boolean {
   } catch (_) {
     return false;
   }
+}
+
+function isValidAvatarUrl(value: string): boolean {
+  const v = value.trim();
+  // Allow data URLs for images
+  if (v.startsWith('data:image/')) return true;
+  // Allow root-relative uploads path
+  if (v.startsWith('/uploads/')) return true;
+  // Allow http(s) URLs
+  return isValidUrl(v);
 }

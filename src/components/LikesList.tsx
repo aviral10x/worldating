@@ -1,26 +1,51 @@
 "use client";
 
 import Image from "next/image";
+import { useEffect, useState } from "react";
 
-const likes = [
-  { name: "Emma", img: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=1887&auto=format&fit=crop", time: "5m" },
-  { name: "James", img: "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=1887&auto=format&fit=crop", time: "22m" },
-  { name: "Ava", img: "https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=1974&auto=format&fit=crop", time: "1d" },
-  { name: "Liam", img: "https://images.unsplash.com/photo-1547106634-56dcd53ae883?q=80&w=1974&auto=format&fit=crop", time: "2d" },
-];
+type Item = { id: number; name: string; img: string; time?: string };
 
-export const LikesList = ({ onSelect }: { onSelect?: (name: string) => void }) => {
+export const LikesList = ({ onSelect }: { onSelect?: (id: number) => void }) => {
+  const [items, setItems] = useState<Item[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      try {
+        const bearer = typeof window !== "undefined" ? localStorage.getItem("bearer_token") : null;
+        const headers: HeadersInit = {};
+        if (bearer) headers["Authorization"] = `Bearer ${bearer}`;
+        const res = await fetch("/api/users?limit=50", { headers });
+        const data = await res.json();
+        if (!mounted) return;
+        const mapped: Item[] = (data || []).map((u: any) => ({
+          id: u.id,
+          name: u.name,
+          img: u.avatarUrl || "/vercel.svg",
+          time: "",
+        }));
+        setItems(mapped);
+      } catch (_) {
+        // ignore
+      }
+    };
+    load();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
   return (
     <div className="soft-card">
       <div className="p-4 border-b border-[var(--border)]">
         <h4 className="font-semibold">Likes & Matches</h4>
       </div>
       <ul className="p-2">
-        {likes.map((p) => (
+        {items.map((p) => (
           <li
-            key={p.name}
+            key={p.id}
             className="flex items-center gap-3 p-2 rounded-xl hover:bg-[var(--secondary)] cursor-pointer"
-            onClick={() => onSelect?.(p.name)}
+            onClick={() => onSelect?.(p.id)}
           >
             <div className="relative h-10 w-10 rounded-xl overflow-hidden">
               <Image src={p.img} alt={p.name} fill className="object-cover" />
@@ -28,21 +53,26 @@ export const LikesList = ({ onSelect }: { onSelect?: (name: string) => void }) =
             <div className="flex-1">
               <div className="flex items-center justify-between">
                 <span className="font-medium">{p.name}</span>
-                <span className="text-xs text-[var(--muted-foreground)]">{p.time}</span>
+                {p.time ? (
+                  <span className="text-xs text-[var(--muted-foreground)]">{p.time}</span>
+                ) : null}
               </div>
-              <p className="text-xs text-[var(--muted-foreground)]">staked on you</p>
+              <p className="text-xs text-[var(--muted-foreground)]">view profile</p>
             </div>
             <button
               className="px-3 py-1 text-xs rounded-lg bg-[var(--primary)] text-white hover:brightness-105"
               onClick={(e) => {
                 e.stopPropagation();
-                onSelect?.(p.name);
+                onSelect?.(p.id);
               }}
             >
-              Stake back
+              Stake
             </button>
           </li>
         ))}
+        {items.length === 0 && (
+          <li className="p-3 text-sm text-[var(--muted-foreground)]">No users yet. Ask friends to register.</li>
+        )}
       </ul>
     </div>
   );

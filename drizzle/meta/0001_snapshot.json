@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "4730930d-f10d-4a93-8fdd-09abf888cf75",
+  "id": "91cf009d-2b77-499d-b949-b5b33974c425",
   "prevId": "aad55a7a-276a-4b62-acc9-3f78daa60477",
   "tables": {
     "daily_picks": {
@@ -199,87 +199,6 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "sessions": {
-      "name": "sessions",
-      "columns": {
-        "id": {
-          "name": "id",
-          "type": "integer",
-          "primaryKey": true,
-          "notNull": true,
-          "autoincrement": true
-        },
-        "user_id": {
-          "name": "user_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "token": {
-          "name": "token",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "created_at": {
-          "name": "created_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
-        "expires_at": {
-          "name": "expires_at",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        }
-      },
-      "indexes": {
-        "sessions_token_unique": {
-          "name": "sessions_token_unique",
-          "columns": [
-            "token"
-          ],
-          "isUnique": true
-        },
-        "session_token_idx": {
-          "name": "session_token_idx",
-          "columns": [
-            "token"
-          ],
-          "isUnique": false
-        },
-        "session_user_id_idx": {
-          "name": "session_user_id_idx",
-          "columns": [
-            "user_id"
-          ],
-          "isUnique": false
-        }
-      },
-      "foreignKeys": {
-        "sessions_user_id_users_id_fk": {
-          "name": "sessions_user_id_users_id_fk",
-          "tableFrom": "sessions",
-          "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
-      "compositePrimaryKeys": {},
-      "uniqueConstraints": {},
-      "checkConstraints": {}
-    },
     "user_interests": {
       "name": "user_interests",
       "columns": {
@@ -392,8 +311,15 @@
           "notNull": false,
           "autoincrement": false
         },
-        "wallet_address": {
-          "name": "wallet_address",
+        "world_address": {
+          "name": "world_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "world_username": {
+          "name": "world_username",
           "type": "text",
           "primaryKey": false,
           "notNull": false,
@@ -415,19 +341,12 @@
         }
       },
       "indexes": {
-        "users_wallet_address_unique": {
-          "name": "users_wallet_address_unique",
+        "users_world_address_unique": {
+          "name": "users_world_address_unique",
           "columns": [
-            "wallet_address"
+            "world_address"
           ],
           "isUnique": true
-        },
-        "wallet_address_idx": {
-          "name": "wallet_address_idx",
-          "columns": [
-            "wallet_address"
-          ],
-          "isUnique": false
         }
       },
       "foreignKeys": {},

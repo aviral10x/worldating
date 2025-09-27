@@ -7,6 +7,8 @@ export const users = sqliteTable('users', {
   location: text('location').notNull(),
   bio: text('bio'),
   avatarUrl: text('avatar_url'),
+  worldAddress: text('world_address').unique(),
+  worldUsername: text('world_username'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });

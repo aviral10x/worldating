@@ -1,7 +1,6 @@
 "use client";
 
 import { Coins, X, MapPin, MoreHorizontal } from "lucide-react";
-import Image from "next/image";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 
@@ -16,136 +15,11 @@ export type Profile = {
   photoUrl: string;
 };
 
-// Export shared default profiles so other components can sample from them
-export const DEFAULT_PROFILES: Profile[] = [
-  {
-    id: 1,
-    name: "Sofia",
-    age: 26,
-    distanceKm: 2.3,
-    bio: "Coffee enthusiast, weekend hiker, and part-time photographer. Looking for good vibes and spontaneous city walks.",
-    tags: ["Travel", "Music", "Coffee", "Dancing", "Netflix"],
-    photoUrl:
-      "https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=1974&auto=format&fit=crop",
-  },
-  {
-    id: 2,
-    name: "Ava",
-    age: 24,
-    distanceKm: 4.1,
-    bio: "Runner, foodie, and museum hopper. Sundays are for farmers markets and film photography.",
-    tags: ["Running", "Food", "Art", "Photography", "Jazz"],
-    photoUrl:
-      "https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=1974&auto=format&fit=crop",
-  },
-  {
-    id: 3,
-    name: "Maya",
-    age: 27,
-    distanceKm: 1.2,
-    bio: "Tech by day, salsa by night. Let's swap playlists and find the best tacos in town.",
-    tags: ["Salsa", "Tech", "Tacos", "Podcasts", "Travel"],
-    photoUrl:
-      "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=1974&auto=format&fit=crop",
-  },
-  // Added more demo profiles
-  {
-    id: 4,
-    name: "Luna",
-    age: 25,
-    distanceKm: 3.4,
-    bio: "Yoga mornings, indie concerts nights. Always down for a bookstore date.",
-    tags: ["Yoga", "Indie", "Books", "Tea", "Art"],
-    photoUrl: "https://images.unsplash.com/photo-1529665253569-6d01c0eaf7b6?q=80&w=1974&auto=format&fit=crop",
-  },
-  {
-    id: 5,
-    name: "Isabella",
-    age: 28,
-    distanceKm: 5.8,
-    bio: "Product designer who sketches in cafes. Let's design our next adventure.",
-    tags: ["Design", "Sketching", "Cafés", "Travel", "Pasta"],
-    photoUrl: "https://images.unsplash.com/photo-1554151228-14d9def656e4?q=80&w=1974&auto=format&fit=crop",
-  },
-  {
-    id: 6,
-    name: "Chloe",
-    age: 23,
-    distanceKm: 1.9,
-    bio: "Pilates, puppies, and polaroids. Looking for laughs and late-night ice cream runs.",
-    tags: ["Pilates", "Dogs", "Photography", "Ice Cream", "Comedy"],
-    photoUrl: "https://images.unsplash.com/photo-1542596594-649edbc13630?q=80&w=1974&auto=format&fit=crop",
-  },
-  {
-    id: 7,
-    name: "Ella",
-    age: 29,
-    distanceKm: 7.2,
-    bio: "Marketing by day, baker by weekend. Taste-tester wanted!",
-    tags: ["Baking", "Brunch", "Podcasts", "Museums", "Running"],
-    photoUrl: "https://images.unsplash.com/photo-1544005316-6e2f8b9839b2?q=80&w=1974&auto=format&fit=crop",
-  },
-  {
-    id: 8,
-    name: "Zoe",
-    age: 26,
-    distanceKm: 2.7,
-    bio: "Climber and camper. Can pitch a tent and a good conversation.",
-    tags: ["Climbing", "Camping", "Coffee", "Road Trips", "Stars"],
-    photoUrl: "https://images.unsplash.com/photo-1531123897727-8f129e1688ce?q=80&w=1974&auto=format&fit=crop",
-  },
-  {
-    id: 9,
-    name: "Aria",
-    age: 24,
-    distanceKm: 3.1,
-    bio: "Piano player, cat whisperer, and matcha addict.",
-    tags: ["Piano", "Cats", "Matcha", "Anime", "Lo-fi"],
-    photoUrl: "https://images.unsplash.com/photo-1547425260-76bcadfb4f2c?q=80&w=1974&auto=format&fit=crop",
-  },
-  {
-    id: 10,
-    name: "Mila",
-    age: 27,
-    distanceKm: 6.0,
-    bio: "Data nerd who loves dancing. Teach me your favorite move?",
-    tags: ["Data", "Dance", "Sushi", "Karaoke", "Travel"],
-    photoUrl: "https://images.unsplash.com/photo-1524230659092-07f99a75c013?q=80&w=1974&auto=format&fit=crop",
-  },
-  {
-    id: 11,
-    name: "Nora",
-    age: 25,
-    distanceKm: 1.1,
-    bio: "Book club host, rainy day movie buff, and soup connoisseur.",
-    tags: ["Books", "Movies", "Cooking", "Hiking", "Tea"],
-    photoUrl: "https://images.unsplash.com/photo-1515121060170-8fdd7a1f0f53?q=80&w=1974&auto=format&fit=crop",
-  },
-  {
-    id: 12,
-    name: "Ruby",
-    age: 28,
-    distanceKm: 4.5,
-    bio: "Startup ops, street photographer, sunset chaser.",
-    tags: ["Startups", "Street", "Sunsets", "Ramen", "Jazz"],
-    photoUrl: "https://images.unsplash.com/photo-1544006659-f0b21884ce1d?q=80&w=1974&auto=format&fit=crop",
-  },
-  {
-    id: 13,
-    name: "Hazel",
-    age: 26,
-    distanceKm: 2.0,
-    bio: "Plant mom with a penchant for picnics.",
-    tags: ["Plants", "Picnics", "Photography", "DIY", "Board Games"],
-    photoUrl: "https://images.unsplash.com/photo-1544005316-5a398fda5256?q=80&w=1974&auto=format&fit=crop",
-  },
-];
-
 export const ProfileCard = ({ profiles, onLike }: { profiles?: Profile[]; onLike?: (profile: Profile) => void }) => {
-  const demoProfiles: Profile[] = useMemo(() => profiles ?? DEFAULT_PROFILES, [profiles]);
+  const demoProfiles: Profile[] = useMemo(() => profiles ?? [], [profiles]);
 
   const [index, setIndex] = useState(0);
-  const current = demoProfiles[index % demoProfiles.length];
+  const current = demoProfiles.length > 0 ? demoProfiles[index % demoProfiles.length] : undefined;
   // 1 for right (like), -1 for left (skip)
   const [exitDir, setExitDir] = useState<-1 | 1>(-1);
 
@@ -161,11 +35,19 @@ export const ProfileCard = ({ profiles, onLike }: { profiles?: Profile[]; onLike
   }, []);
 
   const handleLike = useCallback(() => {
-    if (onLike) onLike(current);
+    if (current && onLike) onLike(current);
     setExitDir(1);
     // Advance with a right-swipe animation similar to skip
     setIndex((i) => i + 1);
   }, [onLike, current]);
+
+  if (!current) {
+    return (
+      <div className="soft-card p-6 text-sm text-[var(--muted-foreground)]">
+        No profiles available yet. Ask users to create their profiles.
+      </div>
+    );
+  }
 
   return (
     <AnimatePresence mode="wait" initial={false}>
@@ -178,12 +60,12 @@ export const ProfileCard = ({ profiles, onLike }: { profiles?: Profile[]; onLike
         className="soft-card overflow-hidden"
       >
         <div className="relative aspect-[3/4] sm:aspect-[4/5] w-full">
-          <Image
+          {/* Use native img to support data URLs and local /uploads without domain config */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
             src={current.photoUrl}
             alt={`${current.name} profile photo`}
-            fill
-            className="object-cover"
-            priority
+            className="absolute inset-0 h-full w-full object-cover"
           />
           <div className="absolute top-3 right-3 flex items-center gap-2">
             <span className="px-2 py-1 text-[12px] rounded-full bg-[var(--muted)] text-[var(--foreground)]/80">New here</span>
@@ -194,7 +76,10 @@ export const ProfileCard = ({ profiles, onLike }: { profiles?: Profile[]; onLike
             <div>
               <h3 className="text-[var(--foreground)] text-lg sm:text-2xl font-semibold">{current.name}, {current.age}</h3>
               <p className="text-[var(--muted-foreground)] flex items-center gap-1 text-sm">
-                <MapPin className="h-4 w-4 text-[var(--primary)]" /> {current.distanceKm} km away
+                <MapPin className="h-4 w-4 text-[var(--primary)]" />
+                {/* distance may not be available; show location instead if provided via tags[0] hack not ideal; consumers should map location into tags or extend Profile */}
+                {/* For now, hide distance value if zero */}
+                {current.distanceKm > 0 ? `${current.distanceKm} km away` : ""}
               </p>
             </div>
             <button className="p-2 rounded-full border bg-[var(--card)] hover:bg-[var(--muted)] transition-colors" aria-label="More">
