@@ -3,6 +3,13 @@ import "./globals.css";
 import VisualEditsMessenger from "../visual-edits/VisualEditsMessenger";
 import ErrorReporter from "@/components/ErrorReporter";
 import Script from "next/script";
+import { Header } from "@/components/Header";
+import { MobileNav } from "@/components/MobileNav";
+import { SidebarProfile } from "@/components/SidebarProfile";
+import { NavList } from "@/components/NavList";
+import { MessagesList } from "@/components/MessagesList";
+import { LikesList } from "@/components/LikesList";
+import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -15,7 +22,22 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
+      <head>
+        <Script id="theme-no-flash" strategy="beforeInteractive">{`
+          (function(){
+            try {
+              var stored = localStorage.getItem('theme');
+              var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+              var useDark = stored ? stored === 'dark' : prefersDark;
+              var root = document.documentElement;
+              if (useDark) root.classList.add('dark'); else root.classList.remove('dark');
+              // Set data-theme for debugging
+              root.setAttribute('data-theme', useDark ? 'dark' : 'light');
+            } catch (e) {}
+          })();
+        `}</Script>
+      </head>
       <body className="antialiased">
         <ErrorReporter />
         <Script
@@ -28,8 +50,30 @@ export default function RootLayout({
           data-debug="true"
           data-custom-data='{"appName": "YourApp", "version": "1.0.0", "greeting": "hi"}'
         />
-        {children}
+        <Header />
+        <div className="min-h-svh bg-[var(--background)] text-[var(--foreground)]">
+          <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
+            {/* Left Sidebar */}
+            <aside className="space-y-6 lg:sticky lg:top-16 self-start">
+              <SidebarProfile />
+              <NavList />
+            </aside>
+
+            {/* Center Content (per-route) */}
+            <section className="space-y-6">
+              {children}
+            </section>
+
+            {/* Right Sidebar */}
+            <aside className="space-y-6 lg:sticky lg:top-16 self-start">
+              <MessagesList />
+              <LikesList />
+            </aside>
+          </main>
+        </div>
+        <MobileNav />
         <VisualEditsMessenger />
+        <Toaster position="top-right" richColors />
       </body>
     </html>
   );
