@@ -4,10 +4,15 @@ import Link from "next/link";
 import { Search, Moon, Sun } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { ConnectButton } from "@rainbow-me/rainbowkit";
+import { useAccount } from "wagmi";
+import { useSession } from "@/lib/hooks/useSession";
 
 export const Header = () => {
   const pathname = usePathname();
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const { isConnected } = useAccount();
+  const { user, isLoading, signIn, signOut } = useSession();
 
   useEffect(() => {
     // Initialize theme from localStorage or system preference
@@ -41,6 +46,32 @@ export const Header = () => {
           <Link href="/faq" className={`${pathname === "/faq" ? "text-[var(--primary)]" : ""} hover:text-[var(--primary)]`}>FAQ</Link>
         </nav>
         <div className="flex items-center gap-2">
+          {/* Wallet connect button - show on all screen sizes */}
+          <div>
+            <ConnectButton chainStatus="icon" showBalance={false} accountStatus={{ smallScreen: "avatar", largeScreen: "full" }} />
+          </div>
+          {/* Auth action: show Sign in when wallet connected but no session; show Logout when session exists */}
+          {!isLoading && (
+            user ? (
+              <button
+                type="button"
+                onClick={signOut}
+                className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--ring)] text-sm"
+              >
+                Logout
+              </button>
+            ) : (
+              isConnected && (
+                <button
+                  type="button"
+                  onClick={signIn}
+                  className="px-3 py-2 rounded-xl border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--ring)] text-sm"
+                >
+                  Sign in
+                </button>
+              )
+            )
+          )}
           <button
             type="button"
             onClick={toggleTheme}

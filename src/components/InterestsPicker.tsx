@@ -30,14 +30,14 @@ export const InterestsPicker = ({ userId = 1 }: InterestsPickerProps) => {
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
         // Fetch all interests
-        const res = await fetch("/api/interests", { headers });
+        const res = await fetch("/api/interests", { headers, credentials: "include" });
         if (!res.ok) throw new Error("Failed to load interests");
         const data: Interest[] = await res.json();
         if (!mounted) return;
         setAllInterests(data);
 
         // Prefill current selections from user profile (if available)
-        const ures = await fetch(`/api/users/${userId}`, { headers });
+        const ures = await fetch(`/api/users/${userId}`, { headers, credentials: "include" });
         if (ures.ok) {
           const u = await ures.json();
           const ids = (u?.interests || []).map((i: any) => i.id as number);
@@ -80,6 +80,7 @@ export const InterestsPicker = ({ userId = 1 }: InterestsPickerProps) => {
       const res = await fetch("/api/user-interests", {
         method: "POST",
         headers,
+        credentials: "include",
         body: JSON.stringify({ userId, interestIds: Array.from(selected) }),
       });
       const data = await res.json();
