@@ -50,6 +50,8 @@ export async function GET(
       location: user[0].location,
       bio: user[0].bio,
       avatarUrl: user[0].avatarUrl,
+      worldAddress: user[0].worldAddress,
+      worldUsername: user[0].worldUsername,
       createdAt: user[0].createdAt,
       updatedAt: user[0].updatedAt,
       interests: userInterestsData,

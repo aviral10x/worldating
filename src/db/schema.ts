@@ -45,3 +45,22 @@ export const dailyPicks = sqliteTable('daily_picks', {
 }, (table) => ({
   uniqueDailyPick: unique().on(table.userId, table.pickUserId, table.pickedForDate)
 }));
+
+export const conversations = sqliteTable('conversations', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  userOneId: integer('user_one_id').references(() => users.id).notNull(),
+  userTwoId: integer('user_two_id').references(() => users.id).notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, (table) => ({
+  uniqueConversation: unique().on(table.userOneId, table.userTwoId)
+}));
+
+export const messages = sqliteTable('messages', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  conversationId: integer('conversation_id').references(() => conversations.id).notNull(),
+  senderId: integer('sender_id').references(() => users.id).notNull(),
+  body: text('body').notNull(),
+  createdAt: integer('created_at').notNull(),
+  readAt: integer('read_at'),
+});

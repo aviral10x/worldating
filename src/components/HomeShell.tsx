@@ -13,6 +13,7 @@ export const HomeShell = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const userId = 1; // TODO: replace with session.user.id when auth is wired
+  const allowedNames = useMemo(() => new Set(["Aviral", "Emily", "Lia", "Tanya"]), []);
 
   const mapApiToProfile = useCallback((item: any): Profile => {
     const u = item.user;
@@ -42,6 +43,19 @@ export const HomeShell = () => {
     };
   }, []);
 
+  const uniqueAndAllowed = useCallback((profiles: Profile[]) => {
+    // keep only Aviral, Emily, Lia, Tanya and remove duplicates by name
+    const seen = new Set<string>();
+    const filtered: Profile[] = [];
+    for (const p of profiles) {
+      if (!allowedNames.has(p.name)) continue;
+      if (seen.has(p.name)) continue;
+      seen.add(p.name);
+      filtered.push(p);
+    }
+    return filtered;
+  }, [allowedNames]);
+
   const fetchVerifiedProfiles = useCallback(async (): Promise<Profile[]> => {
     const token = typeof window !== "undefined" ? localStorage.getItem("bearer_token") : null;
     const res = await fetch(`/api/users?limit=20`, {
@@ -52,8 +66,8 @@ export const HomeShell = () => {
     if (!res.ok) return [];
     const data = await res.json();
     const verified = (Array.isArray(data) ? data : []).filter((u: any) => !!u.worldAddress);
-    return verified.map(mapUserToProfile);
-  }, [mapUserToProfile]);
+    return uniqueAndAllowed(verified.map(mapUserToProfile));
+  }, [mapUserToProfile, uniqueAndAllowed]);
 
   const fetchPicks = useCallback(async () => {
     try {
@@ -67,7 +81,8 @@ export const HomeShell = () => {
       });
       if (!res.ok) throw new Error("Failed to load daily picks");
       const data = await res.json();
-      const mapped: Profile[] = (Array.isArray(data) ? data : []).map(mapApiToProfile);
+      const mappedRaw: Profile[] = (Array.isArray(data) ? data : []).map(mapApiToProfile);
+      const mapped = uniqueAndAllowed(mappedRaw);
 
       if (mapped.length === 0) {
         // Fallback to verified profiles (users with worldAddress)
@@ -88,7 +103,7 @@ export const HomeShell = () => {
     } finally {
       setLoading(false);
     }
-  }, [mapApiToProfile, userId, fetchVerifiedProfiles]);
+  }, [mapApiToProfile, userId, fetchVerifiedProfiles, uniqueAndAllowed]);
 
   useEffect(() => {
     fetchPicks();

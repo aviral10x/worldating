@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 
 type Item = { id: number; name: string; img: string; time?: string };
 
+const VERIFIED_NAMES = new Set(["Aviral", "Emily", "Lia", "Tanya"]);
+
 export const LikesList = ({ onSelect }: { onSelect?: (id: number) => void }) => {
   const [items, setItems] = useState<Item[]>([]);
 
@@ -30,7 +32,8 @@ export const LikesList = ({ onSelect }: { onSelect?: (id: number) => void }) => 
             time: likedAt ? likedAt.toLocaleDateString() : "",
           } as Item;
         });
-        setItems(mapped);
+        // Keep only verified profiles by name to remove demo data
+        setItems(mapped.filter((i) => VERIFIED_NAMES.has(i.name)));
       } catch (_) {
         // ignore
       }
