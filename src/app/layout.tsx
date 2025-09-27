@@ -10,6 +10,7 @@ import { NavList } from "@/components/NavList";
 import { MessagesList } from "@/components/MessagesList";
 import { LikesList } from "@/components/LikesList";
 import { Toaster } from "@/components/ui/sonner";
+import { MiniKitProvider } from "@worldcoin/minikit-js/minikit-provider";
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -23,58 +24,60 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <head>
-        <Script id="theme-no-flash" strategy="beforeInteractive">{`
-          (function(){
-            try {
-              var stored = localStorage.getItem('theme');
-              var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
-              var useDark = stored ? stored === 'dark' : prefersDark;
-              var root = document.documentElement;
-              if (useDark) root.classList.add('dark'); else root.classList.remove('dark');
-              // Set data-theme for debugging
-              root.setAttribute('data-theme', useDark ? 'dark' : 'light');
-            } catch (e) {}
-          })();
-        `}</Script>
-      </head>
-      <body className="antialiased">
-        <ErrorReporter />
-        <Script
-          src="https://slelguoygbfzlpylpxfs.supabase.co/storage/v1/object/public/scripts//route-messenger.js"
-          strategy="afterInteractive"
-          data-target-origin="*"
-          data-message-type="ROUTE_CHANGE"
-          data-include-search-params="true"
-          data-only-in-iframe="true"
-          data-debug="true"
-          data-custom-data='{"appName": "YourApp", "version": "1.0.0", "greeting": "hi"}'
-        />
-        <Header />
-        <div className="min-h-svh bg-[var(--background)] text-[var(--foreground)]">
-          <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
-            {/* Left Sidebar */}
-            <aside className="space-y-6 lg:sticky lg:top-16 self-start">
-              <SidebarProfile />
-              <NavList />
-            </aside>
+      <MiniKitProvider>
+        <head>
+          <Script id="theme-no-flash" strategy="beforeInteractive">{`
+            (function(){
+              try {
+                var stored = localStorage.getItem('theme');
+                var prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+                var useDark = stored ? stored === 'dark' : prefersDark;
+                var root = document.documentElement;
+                if (useDark) root.classList.add('dark'); else root.classList.remove('dark');
+                root.setAttribute('data-theme', useDark ? 'dark' : 'light');
+              } catch (e) {}
+            })();
+          `}</Script>
+        </head>
+        <body className="antialiased">
+          <ErrorReporter />
+          <Script
+            src="https://slelguoygbfzlpylpxfs.supabase.co/storage/v1/object/public/scripts//route-messenger.js"
+            strategy="afterInteractive"
+            data-target-origin="*"
+            data-message-type="ROUTE_CHANGE"
+            data-include-search-params="true"
+            data-only-in-iframe="true"
+            data-debug="true"
+            data-custom-data='{"appName": "YourApp", "version": "1.0.0", "greeting": "hi"}'
+          />
+          <Header />
+          <div className="min-h-svh bg-[var(--background)] text-[var(--foreground)]">
+            <main className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6 grid gap-6 lg:grid-cols-[280px_minmax(0,1fr)_320px]">
+              {/* Left Sidebar - hidden on mobile */}
+              <aside className="space-y-6 lg:sticky lg:top-16 self-start hidden lg:block">
+                <SidebarProfile />
+                <NavList />
+              </aside>
 
-            {/* Center Content (per-route) */}
-            <section className="space-y-6">
-              {children}
-            </section>
+              {/* Center Content */}
+              <section className="space-y-6">{children}</section>
 
-            {/* Right Sidebar */}
-            <aside className="space-y-6 lg:sticky lg:top-16 self-start">
-              <MessagesList />
-              <LikesList />
-            </aside>
-          </main>
-        </div>
-        <MobileNav />
-        <VisualEditsMessenger />
-        <Toaster position="top-right" richColors />
-      </body>
+              {/* Right Sidebar - hidden on mobile */}
+              <aside className="space-y-6 lg:sticky lg:top-16 self-start hidden lg:block">
+                <MessagesList />
+                <LikesList />
+              </aside>
+            </main>
+          </div>
+
+          {/* Mobile Navigation - visible only on small screens */}
+          <MobileNav />
+
+          <VisualEditsMessenger />
+          <Toaster position="top-right" richColors />
+        </body>
+      </MiniKitProvider>
     </html>
   );
 }

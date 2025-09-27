@@ -4,7 +4,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import { Loader2, RefreshCw } from "lucide-react";
 
-export const DailyPicksRefresh = ({ userId = 1 }: { userId?: number }) => {
+export const DailyPicksRefresh = ({ userId = 1, onAfterRefresh }: { userId?: number; onAfterRefresh?: (info?: { count?: number }) => void }) => {
   const [loading, setLoading] = useState(false);
 
   const handleClick = async () => {
@@ -30,6 +30,8 @@ export const DailyPicksRefresh = ({ userId = 1 }: { userId?: number }) => {
       }
 
       toast.success(data?.message || `Daily picks refreshed${typeof data.count === "number" ? `: ${data.count} picks` : ""}`);
+      // Notify parent so it can surface 3 fresh picks in the UI
+      onAfterRefresh?.({ count: data.count });
     } catch (err) {
       toast.error("Failed to refresh. Please try again.");
     } finally {

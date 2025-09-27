@@ -1,17 +1,9 @@
-import { ProfileCard } from "@/components/ProfileCard";
-import { DailyPicksRefresh } from "@/components/DailyPicksRefresh";
+import HomeShell from "@/components/HomeShell";
 
 export default function Home() {
   return (
-    <>
-      <ProfileCard />
-      <div className="soft-card p-4 flex items-center justify-between">
-        <div>
-          <div className="font-semibold">Daily Picks</div>
-          <p className="text-sm text-[var(--muted-foreground)]">Handpicked profiles based on your interests</p>
-        </div>
-        <DailyPicksRefresh userId={1} />
-      </div>
-    </>
+    <div id="home-mobile-marker" className="mx-auto w-full max-w-md min-h-[100dvh] sm:min-h-0 px-4 py-4 space-y-4">
+      <HomeShell />
+    </div>
   );
 }

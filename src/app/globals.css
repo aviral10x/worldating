@@ -1,3 +1,5 @@
+/* Updated: 2025-09-27T08:52:57.090Z */
+/* Updated: 2025-09-27T07:54:28.458Z */
 /* Updated: 2025-09-16T21:24:37.613825 */
 @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@400;600&display=swap");
 @import "tailwindcss";
@@ -130,6 +132,11 @@
 }
 
 @layer base {
+  @media (max-width: 1023px) {
+    body:has(#home-mobile-marker) main > aside {
+      display: none !important;
+    }
+  }
   *, *::before, *::after {
     border-color: var(--border);
     outline-color: color-mix(in oklab, var(--ring) 50%, transparent);
