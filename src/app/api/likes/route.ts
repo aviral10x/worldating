@@ -94,16 +94,16 @@ export async function POST(request: NextRequest) {
     const { likerId, likedId } = body;
 
     // Validate input
-    if (!likerId || typeof likerId !== 'number') {
+    if (!likerId || typeof likerId !== 'number' || !Number.isInteger(likerId) || likerId <= 0) {
       return NextResponse.json({ 
-        error: 'Valid likerId is required',
+        error: 'Valid likerId is required (positive integer)',
         code: 'INVALID_LIKER_ID'
       }, { status: 400 });
     }
 
-    if (!likedId || typeof likedId !== 'number') {
+    if (!likedId || typeof likedId !== 'number' || !Number.isInteger(likedId) || likedId <= 0) {
       return NextResponse.json({ 
-        error: 'Valid likedId is required',
+        error: 'Valid likedId is required (positive integer)',
         code: 'INVALID_LIKED_ID'
       }, { status: 400 });
     }
@@ -141,7 +141,35 @@ export async function POST(request: NextRequest) {
       }, { status: 404 });
     }
 
-    // Insert like record (idempotent due to unique constraint)
+    // Check if like already exists
+    const [existingLike] = await db.select()
+      .from(likes)
+      .where(and(
+        eq(likes.likerId, likerId),
+        eq(likes.likedId, likedId)
+      ))
+      .limit(1);
+
+    if (existingLike) {
+      // Check if reciprocal like exists for match status
+      const [reciprocalLike] = await db.select()
+        .from(likes)
+        .where(and(
+          eq(likes.likerId, likedId),
+          eq(likes.likedId, likerId)
+        ))
+        .limit(1);
+
+      const isMatch = !!reciprocalLike;
+
+      return NextResponse.json({
+        success: true,
+        alreadyLiked: true,
+        match: isMatch
+      }, { status: 200 });
+    }
+
+    // Insert new like record
     const likeRecord = await db.insert(likes)
       .values({
         likerId,
@@ -153,56 +181,22 @@ export async function POST(request: NextRequest) {
     // Check if reciprocal like exists
     const [reciprocalLike] = await db.select()
       .from(likes)
-      .where(
-        and(
-          eq(likes.likerId, likedId),
-          eq(likes.likedId, likerId)
-        )
-      )
+      .where(and(
+        eq(likes.likerId, likedId),
+        eq(likes.likedId, likerId)
+      ))
       .limit(1);
 
     const isMatch = !!reciprocalLike;
 
     return NextResponse.json({
       success: true,
+      like: likeRecord[0],
       match: isMatch
     }, { status: 201 });
 
   } catch (error) {
     console.error('POST likes error:', error);
-    
-    // Handle unique constraint violation (like already exists)
-    if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) {
-      // Get the existing like to check for match
-      const body = await request.json();
-      const { likerId, likedId } = body;
-
-      try {
-        const [reciprocalLike] = await db.select()
-          .from(likes)
-          .where(
-            and(
-              eq(likes.likerId, likedId),
-              eq(likes.likedId, likerId)
-            )
-          )
-          .limit(1);
-
-        const isMatch = !!reciprocalLike;
-
-        return NextResponse.json({
-          success: true,
-          match: isMatch
-        }, { status: 201 });
-      } catch (matchError) {
-        console.error('Check match error:', matchError);
-        return NextResponse.json({ 
-          error: 'Internal server error while checking match',
-          code: 'MATCH_CHECK_ERROR'
-        }, { status: 500 });
-      }
-    }
-
     return NextResponse.json({ 
       error: 'Internal server error',
       code: 'INTERNAL_ERROR'
