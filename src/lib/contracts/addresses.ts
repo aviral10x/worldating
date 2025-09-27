@@ -30,6 +30,6 @@ export const getWldAddress = (): `0x${string}` =>
 // Optional: frontend display params (keep in sync with onchain values)
 export const STAKE_PARAMS = {
   // Stake amount in wei as a string to avoid BigInt in env parsing; convert to BigInt where needed
-  amountWei: process.env.NEXT_PUBLIC_STAKE_AMOUNT_WEI || "50000000000000000", // 0.05 WLD by default
+  amountWei: process.env.NEXT_PUBLIC_STAKE_AMOUNT_WEI || "10000000000000000", // 0.01 WLD
   ttlSeconds: Number(process.env.NEXT_PUBLIC_STAKE_TTL || 604800), // 7 days
 } as const;

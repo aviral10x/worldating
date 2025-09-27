@@ -1,14 +1,17 @@
 "use client";
 
-import { useMemo, useState, useCallback, useRef, useEffect } from "react";
+import { useMemo, useState, useCallback, useEffect } from "react";
 import { LikesList } from "@/components/LikesList";
 import { Profile, ProfileCard } from "@/components/ProfileCard";
 import { toast } from "sonner";
+import { MiniKit, Tokens, PayCommandInput, tokenToDecimals } from "@worldcoin/minikit-js";
+
+// Destination address for MiniKit pay (no smart contract/escrow)
+const DEST = process.env.NEXT_PUBLIC_MINIKIT_DEST as string | undefined;
 
 export const LikesContent = () => {
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const pollingRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load real users and map to ProfileCard shape
   useEffect(() => {
@@ -28,7 +31,10 @@ export const LikesContent = () => {
           distanceKm: 0,
           bio: u.bio || "",
           tags: [],
-          photoUrl: u.avatarUrl || "/vercel.svg",
+          photoUrl: (() => {
+            const src = u.avatarUrl || u.avatar_url || "";
+            return /pravatar\.cc|i\.pravatar\.cc/.test(src) ? "/vercel.svg" : src || "/vercel.svg";
+          })(),
         }));
         setProfiles(mapped);
         if (mapped.length && selectedUserId == null) setSelectedUserId(mapped[0].id);
@@ -48,109 +54,65 @@ export const LikesContent = () => {
     return found ? [found] : profiles.slice(0, 1);
   }, [profiles, selectedUserId]);
 
-  const stopPolling = useCallback(() => {
-    if (pollingRef.current) {
-      clearInterval(pollingRef.current);
-      pollingRef.current = null;
-    }
-  }, []);
-
-  useEffect(() => {
-    return () => stopPolling();
-  }, [stopPolling]);
-
   const handleStake = useCallback(async (p: Profile) => {
     try {
       toast.dismiss();
-      const bearer = typeof window !== "undefined" ? localStorage.getItem("bearer_token") : null;
 
-      toast.loading("Preparing stake...");
-      const initRes = await fetch("/api/stake/initiate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
-        },
-        body: JSON.stringify({
-          targetProfile: { id: p.id, name: p.name },
-        }),
-      });
-
-      const init = await initRes.json();
-      if (!initRes.ok) {
-        throw new Error(init?.error || "Failed to initiate stake");
+      if (!MiniKit.isInstalled()) {
+        toast.error("World App not available. Open inside World App to continue.");
+        return;
       }
-
-      const { escrowAddress, stakeAmountWei, wldTokenAddress, ref } = init as {
-        escrowAddress: string;
-        stakeAmountWei: string;
-        wldTokenAddress: string | null;
-        ref: string;
-      };
-
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const mini: any = (globalThis as any).MiniKit;
-      if (!mini?.commands?.pay) {
-        toast.error("World App not available. Open inside World App to stake.");
+      if (!DEST) {
+        toast.error("Destination address not configured.");
         return;
       }
 
-      toast.dismiss();
-      toast.message("Confirm payment in World App", {
-        description: `Staking to ${p.name}...`,
-      });
+      toast.loading("Preparing payment...");
 
-      const payRes = await mini.commands.pay({
-        to: escrowAddress,
+      // 1) Create a reference for this payment
+      const initRes = await fetch("/api/initiate-payment", { method: "POST" });
+      if (!initRes.ok) throw new Error("Failed to initiate payment");
+      const { id: reference } = await initRes.json();
+
+      // 2) Build MiniKit pay payload for 0.01 WLD
+      const payPayload: PayCommandInput = {
+        reference,
+        to: DEST,
         tokens: [
           {
-            address: wldTokenAddress ?? "native",
-            amount: stakeAmountWei,
+            symbol: Tokens.WLD,
+            token_amount: tokenToDecimals(0.01, Tokens.WLD).toString(),
           },
         ],
-        reference: ref,
-      });
+        description: `Stake to ${p.name}: 0.01 WLD`,
+      };
 
-      if (!payRes || payRes.status === "failed") {
+      toast.dismiss();
+      const { finalPayload } = await MiniKit.commandsAsync.pay(payPayload);
+      if (!finalPayload || finalPayload.status === "error") {
         toast.error("Payment failed or cancelled");
         return;
       }
 
-      toast.success("Stake submitted. Waiting for confirmation...");
+      // 3) Confirm via Developer Portal API
+      const confirm = await fetch("/api/confirm-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payload: finalPayload }),
+      });
+      const confirmJson = await confirm.json();
 
-      let checks = 0;
-      stopPolling();
-      pollingRef.current = setInterval(async () => {
-        try {
-          checks++;
-          const res = await fetch("/api/stake/status", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}),
-            },
-            body: JSON.stringify({ ref }),
-          });
-          const data = await res.json();
-          if (data?.status === "matched") {
-            toast.success("Matched! Chat unlocked.");
-            stopPolling();
-          } else if (data?.status === "confirmed") {
-            toast.success("Stake confirmed. Waiting for them to stake back.");
-          }
-          if (checks > 30) {
-            stopPolling();
-            toast.message("Still pending", { description: "We'll keep this running in the background." });
-          }
-        } catch {
-          // ignore single poll errors
-        }
-      }, 2000);
+      if (!confirm.ok || !confirmJson?.success) {
+        toast.error("Payment not confirmed yet");
+        return;
+      }
+
+      toast.success("Payment confirmed ✅");
     } catch (e: any) {
       toast.dismiss();
-      toast.error(e?.message || "Failed to stake");
+      toast.error(e?.message || "Failed to complete payment");
     }
-  }, [stopPolling]);
+  }, []);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">

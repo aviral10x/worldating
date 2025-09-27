@@ -1,6 +1,6 @@
 "use client";
 
-import Image from "next/image";
+// remove next/image to allow data URLs and local uploads without config
 import { useEffect, useState } from "react";
 
 type Item = { id: number; name: string; img: string; time?: string };
@@ -18,12 +18,16 @@ export const LikesList = ({ onSelect }: { onSelect?: (id: number) => void }) => 
         const res = await fetch("/api/users?limit=50", { headers });
         const data = await res.json();
         if (!mounted) return;
-        const mapped: Item[] = (data || []).map((u: any) => ({
-          id: u.id,
-          name: u.name,
-          img: u.avatarUrl || "/vercel.svg",
-          time: "",
-        }));
+        const mapped: Item[] = (data || []).map((u: any) => {
+          const raw = u.avatarUrl || u.avatar_url || "";
+          const img = /pravatar\.cc|i\.pravatar\.cc/.test(raw) ? "/vercel.svg" : raw || "/vercel.svg";
+          return {
+            id: u.id,
+            name: u.name,
+            img,
+            time: "",
+          } as Item;
+        });
         setItems(mapped);
       } catch (_) {
         // ignore
@@ -48,7 +52,7 @@ export const LikesList = ({ onSelect }: { onSelect?: (id: number) => void }) => 
             onClick={() => onSelect?.(p.id)}
           >
             <div className="relative h-10 w-10 rounded-xl overflow-hidden">
-              <Image src={p.img} alt={p.name} fill className="object-cover" />
+              <img src={p.img} alt={p.name} className="h-full w-full object-cover" onError={(e) => { e.currentTarget.onerror = null; e.currentTarget.src = "/vercel.svg"; }} />
             </div>
             <div className="flex-1">
               <div className="flex items-center justify-between">

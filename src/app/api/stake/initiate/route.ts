@@ -1,5 +1,5 @@
 import { NextRequest } from "next/server";
-import { getEscrowAddress, getWldAddress, RUNTIME_CHAIN_ID, STAKE_PARAMS } from "@/lib/contracts/addresses";
+import { getEscrowAddress, getWldAddress, RUNTIME_CHAIN_ID } from "@/lib/contracts/addresses";
 
 // Minimal initiate endpoint to return staking parameters from env
 // NOTE: This does not persist state yet. It returns a unique reference and
@@ -43,9 +43,11 @@ export async function POST(req: NextRequest) {
 
     const APP_ID = getEnv("APP_ID");
     const NEXT_PUBLIC_CHAIN_ID = String(resolvedChainId);
-    const NEXT_PUBLIC_STAKE_AMOUNT_WEI = process.env.NEXT_PUBLIC_STAKE_AMOUNT_WEI || STAKE_PARAMS.amountWei;
 
-    // Optional: token address can vary per chain. Fallback to chain default if not set.
+    // ENFORCE EXACT 0.01 WLD, do not allow override via env
+    const EXACT_STAKE_AMOUNT_WEI = "10000000000000000"; // 0.01 WLD
+
+    // Token address must be provided (WLD is an ERC-20, not native)
     const WLD_TOKEN_ADDRESS =
       process.env.WLD_TOKEN_ADDRESS ||
       process.env[`WLD_TOKEN_ADDRESS${chainSuffix}`] ||
@@ -53,12 +55,20 @@ export async function POST(req: NextRequest) {
       process.env[`NEXT_PUBLIC_WLD_TOKEN_ADDRESS${chainSuffix}`] ||
       getWldAddress();
 
-    // Validate escrow address is configured and not zero-address
+    // Validate addresses
     const isHexAddress = /^0x[0-9a-fA-F]{40}$/.test(ESCROW_ADDRESS);
     const isZero = /^0x0{40}$/i.test(ESCROW_ADDRESS);
     if (!isHexAddress || isZero) {
       throw new Error(
         `ESCROW_ADDRESS is not set or invalid for chain ${NEXT_PUBLIC_CHAIN_ID}. Set ENV ESCROW_ADDRESS (or NEXT_PUBLIC_ESCROW_ADDRESS) or update ESCROW_ADDRESSES mapping for chain ${NEXT_PUBLIC_CHAIN_ID}.`
+      );
+    }
+
+    const wldIsHex = typeof WLD_TOKEN_ADDRESS === "string" && /^0x[0-9a-fA-F]{40}$/.test(WLD_TOKEN_ADDRESS);
+    const wldIsZero = typeof WLD_TOKEN_ADDRESS === "string" && /^0x0{40}$/i.test(WLD_TOKEN_ADDRESS);
+    if (!wldIsHex || wldIsZero) {
+      throw new Error(
+        `WLD token address is not configured for chain ${NEXT_PUBLIC_CHAIN_ID}. Set WLD_TOKEN_ADDRESS (or NEXT_PUBLIC_WLD_TOKEN_ADDRESS) or update WLD_ADDRESSES mapping.`
       );
     }
 
@@ -69,8 +79,8 @@ export async function POST(req: NextRequest) {
         escrowAddress: ESCROW_ADDRESS,
         appId: APP_ID,
         chainId: Number(NEXT_PUBLIC_CHAIN_ID),
-        stakeAmountWei: NEXT_PUBLIC_STAKE_AMOUNT_WEI,
-        wldTokenAddress: WLD_TOKEN_ADDRESS ?? null,
+        stakeAmountWei: EXACT_STAKE_AMOUNT_WEI,
+        wldTokenAddress: WLD_TOKEN_ADDRESS,
         ref,
         // Keep shape flexible for future use
         reference: ref,

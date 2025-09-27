@@ -66,6 +66,10 @@ export const ProfileCard = ({ profiles, onLike }: { profiles?: Profile[]; onLike
             src={current.photoUrl}
             alt={`${current.name} profile photo`}
             className="absolute inset-0 h-full w-full object-cover"
+            onError={(e) => {
+              e.currentTarget.onerror = null;
+              e.currentTarget.src = "/vercel.svg";
+            }}
           />
           <div className="absolute top-3 right-3 flex items-center gap-2">
             <span className="px-2 py-1 text-[12px] rounded-full bg-[var(--muted)] text-[var(--foreground)]/80">New here</span>
