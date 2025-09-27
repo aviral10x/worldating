@@ -1,3 +1,6 @@
+// Ensure this route runs on the Node.js runtime (required for 'crypto')
+export const runtime = "nodejs";
+
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { db } from '@/db';
@@ -48,9 +51,14 @@ export async function POST(request: NextRequest) {
 
     // Validate message components
     const requestUrl = new URL(request.url);
-    const expectedDomain = requestUrl.host;
+    // Normalize and optionally override expected domain to avoid port/subdomain mismatches
+    const envDomain = process.env.SIWE_DOMAIN || process.env.NEXT_PUBLIC_APP_DOMAIN;
+    const normalizeDomain = (d: string) => d.toLowerCase().replace(/^www\./, '').split(':')[0];
+    const expectedDomainBase = envDomain || requestUrl.host;
+    const expectedDomain = normalizeDomain(expectedDomainBase);
+    const incomingDomain = normalizeDomain(messageDomain);
 
-    if (messageDomain !== expectedDomain) {
+    if (!(incomingDomain === expectedDomain || incomingDomain.endsWith('.' + expectedDomain))) {
       return NextResponse.json({
         error: 'Domain mismatch in SIWE message',
         code: 'DOMAIN_MISMATCH'
@@ -105,47 +113,63 @@ export async function POST(request: NextRequest) {
 
     // Upsert user by wallet address
     let user;
-    const existingUsers = await db.select()
-      .from(users)
-      .where(eq(users.walletAddress, normalizedAddress))
-      .limit(1);
-
-    if (existingUsers.length > 0) {
-      user = existingUsers[0];
-      const updatedUsers = await db.update(users)
-        .set({ updatedAt: Date.now() })
+    try {
+      const existingUsers = await db.select()
+        .from(users)
         .where(eq(users.walletAddress, normalizedAddress))
-        .returning();
-      user = updatedUsers[0];
-    } else {
-      const shortAddress = `${normalizedAddress.slice(0, 6)}...${normalizedAddress.slice(-4)}`;
-      const newUsers = await db.insert(users).values({
-        name: shortAddress,
-        age: 25,
-        location: 'Unknown',
-        bio: null,
-        avatarUrl: null,
-        walletAddress: normalizedAddress,
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      }).returning();
-      user = newUsers[0];
+        .limit(1);
+
+      if (existingUsers.length > 0) {
+        user = existingUsers[0];
+        const updatedUsers = await db.update(users)
+          .set({ updatedAt: Date.now() })
+          .where(eq(users.walletAddress, normalizedAddress))
+          .returning();
+        user = updatedUsers[0];
+      } else {
+        const shortAddress = `${normalizedAddress.slice(0, 6)}...${normalizedAddress.slice(-4)}`;
+        const newUsers = await db.insert(users).values({
+          name: shortAddress,
+          age: 25,
+          location: 'Unknown',
+          bio: null,
+          avatarUrl: null,
+          walletAddress: normalizedAddress,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        }).returning();
+        user = newUsers[0];
+      }
+    } catch (dbUserError) {
+      console.error('DB user upsert error:', dbUserError);
+      return NextResponse.json({ error: 'Database error (user upsert)', code: 'DB_USER' }, { status: 500 });
     }
 
     // Generate session token (32 bytes as base64url)
-    const tokenBytes = crypto.randomBytes(32);
-    const sessionToken = tokenBytes.toString('base64url');
+    let sessionToken = '';
+    try {
+      const tokenBytes = crypto.randomBytes(32);
+      sessionToken = tokenBytes.toString('base64url');
+    } catch (cryptoErr) {
+      console.error('Crypto error generating token:', cryptoErr);
+      return NextResponse.json({ error: 'Token generation failed', code: 'TOKEN_GEN' }, { status: 500 });
+    }
 
     const now = Date.now();
     const expiresAt = now + (7 * 24 * 60 * 60 * 1000); // 7 days
 
     // Create session
-    await db.insert(sessions).values({
-      userId: user.id,
-      token: sessionToken,
-      createdAt: now,
-      expiresAt: expiresAt
-    });
+    try {
+      await db.insert(sessions).values({
+        userId: user.id,
+        token: sessionToken,
+        createdAt: now,
+        expiresAt: expiresAt
+      });
+    } catch (dbSessionError) {
+      console.error('DB session insert error:', dbSessionError);
+      return NextResponse.json({ error: 'Database error (session insert)', code: 'DB_SESSION' }, { status: 500 });
+    }
 
     // Prepare response and set cookies
     const res = NextResponse.json({
@@ -184,8 +208,10 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     console.error('POST /api/siwe/verify error:', error);
+    const message = error instanceof Error ? error.message : 'Internal server error';
     return NextResponse.json({
-      error: 'Internal server error'
+      error: message,
+      code: 'INTERNAL_ERROR'
     }, { status: 500 });
   }
 }

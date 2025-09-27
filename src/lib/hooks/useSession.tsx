@@ -61,7 +61,7 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
       const { nonce } = await nonceRes.json();
 
       // 2) Build SIWE message (EIP-4361)
-      const domain = window.location.host;
+      const domain = window.location.hostname; // avoid port in SIWE domain
       const origin = window.location.origin;
       const issuedAt = new Date().toISOString();
 
@@ -79,9 +79,9 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
       });
 
       if (!verifyRes.ok) {
-        const err = await verifyRes.json().catch(() => ({}));
+        const err = await verifyRes.json().catch(async () => ({ raw: await verifyRes.text() }));
         const code = err?.code;
-        const messageText = err?.error || "Failed to verify SIWE";
+        const messageText = err?.error || err?.raw || "Failed to verify SIWE";
         throw Object.assign(new Error(messageText), { code });
       }
 
