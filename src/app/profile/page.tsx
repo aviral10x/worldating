@@ -1,7 +1,7 @@
-import { ProfileGate } from "@/components/profile/ProfileGate";
+import { ProfileBuilder } from "@/components/profile/ProfileBuilder";
 
 export default function ProfilePage() {
   return (
-    <ProfileGate />
+    <ProfileBuilder />
   );
 }

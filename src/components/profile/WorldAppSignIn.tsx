@@ -1,14 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { MiniKit } from "@worldcoin/minikit-js";
 
-type Props = {
-  onSuccess?: (info: { address?: string; username?: string }) => void;
-  compact?: boolean;
-};
-
-export const WorldAppSignIn = ({ onSuccess, compact = false }: Props) => {
+export const WorldAppSignIn = () => {
+  const router = useRouter();
   const [installed, setInstalled] = useState<boolean | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<string>("");
@@ -53,20 +50,13 @@ export const WorldAppSignIn = ({ onSuccess, compact = false }: Props) => {
       // const verify = await fetch("/api/complete-siwe", { ... })
       // if (!verify?.isValid) { setMessage("Server verification failed."); return; }
 
-      const address = (finalPayload as any)?.address as string | undefined;
-      const username = MiniKit.user?.username as string | undefined;
+      const address = (finalPayload as any)?.address;
+      const username = MiniKit.user?.username;
 
-      // Mark signed-in locally for demo gating
-      try {
-        localStorage.setItem("world_signed_in", "1");
-        if (address) localStorage.setItem("world_address", address);
-        if (username) localStorage.setItem("world_username", username);
-      } catch {}
+      setMessage(`Signed in as ${username || address || "user"}. Redirecting...`);
 
-      setMessage(`Signed in as ${username || address || "user"}.`);
-
-      // Notify parent to reveal next section (ProfileBuilder)
-      onSuccess?.({ address, username });
+      // Prefer router navigation over window.location
+      router.push("/");
     } catch (err) {
       console.error(err);
       setMessage("Something went wrong during sign in.");
@@ -75,33 +65,27 @@ export const WorldAppSignIn = ({ onSuccess, compact = false }: Props) => {
     }
   }
 
-  const Card = (
-    <div className="w-full max-w-[420px] bg-white text-neutral-900 border border-[var(--border)] p-6 shadow-md rounded-xl">
-      <h1 className="m-0 text-2xl font-extrabold tracking-wide text-neutral-900">Sign in</h1>
-      <p className="mt-2 mb-4 text-neutral-600">Use your World App to sign in.</p>
-
-      <button
-        onClick={handleSignIn}
-        disabled={loading || installed === false}
-        className="w-full h-12 font-extrabold uppercase border-2 border-violet-900 bg-violet-500 text-white disabled:opacity-60 disabled:cursor-not-allowed hover:bg-violet-600 transition-colors rounded-lg"
-      >
-        {loading ? "Connecting..." : "Sign in with World App"}
-      </button>
-
-      <div className="mt-3 text-xs text-neutral-500">
-        {installed === false && (
-          <div>MiniKit not detected. Open this mini-app inside World App.</div>
-        )}
-        {message && <div className="mt-2 text-neutral-900">{message}</div>}
-      </div>
-    </div>
-  );
-
-  if (compact) return Card;
-
   return (
-    <main className="min-h-[40dvh] grid place-items-center">
-      {Card}
+    <main className="min-h-[100dvh] grid place-items-center bg-gradient-to-br from-violet-600 to-indigo-600 text-white p-6">
+      <div className="w-full max-w-[420px] bg-white text-neutral-900 border-2 border-neutral-900 p-6 shadow-[8px_8px_0_0_#111827] rounded-xl">
+        <h1 className="m-0 text-2xl font-extrabold tracking-wide text-neutral-900">Sign in</h1>
+        <p className="mt-2 mb-4 text-neutral-600">Use your World App to sign in.</p>
+
+        <button
+          onClick={handleSignIn}
+          disabled={loading || installed === false}
+          className="w-full h-12 font-extrabold uppercase border-2 border-violet-900 bg-violet-500 text-white disabled:opacity-60 disabled:cursor-not-allowed hover:bg-violet-600 transition-colors rounded-lg"
+        >
+          {loading ? "Connecting..." : "Sign in with World App"}
+        </button>
+
+        <div className="mt-3 text-xs text-neutral-500">
+          {installed === false && (
+            <div>MiniKit not detected. Open this mini-app inside World App.</div>
+          )}
+          {message && <div className="mt-2 text-neutral-900">{message}</div>}
+        </div>
+      </div>
     </main>
   );
 };
