@@ -3,21 +3,12 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { Loader2, RefreshCw } from "lucide-react";
-import { useSession } from "@/lib/hooks/useSession";
 
-export const DailyPicksRefresh = () => {
+export const DailyPicksRefresh = ({ userId = 1 }: { userId?: number }) => {
   const [loading, setLoading] = useState(false);
-  const { user } = useSession();
 
   const handleClick = async () => {
     if (loading) return;
-
-    const userId = user?.id;
-    if (!userId) {
-      toast.error("Please connect wallet and sign in to refresh daily picks.");
-      return;
-    }
-
     setLoading(true);
     try {
       const token = typeof window !== "undefined" ? localStorage.getItem("bearer_token") : null;

@@ -1,4 +1,4 @@
-import { InterestsPickerWithSession } from "@/components/InterestsPickerWithSession";
+import { InterestsPicker } from "@/components/InterestsPicker";
 
 export default function OnboardingPage() {
   return (
@@ -7,8 +7,8 @@ export default function OnboardingPage() {
         <h1 className="text-2xl font-semibold">Onboarding</h1>
         <p className="text-sm text-[var(--muted-foreground)]">Pick a few interests so we can personalize your Daily Picks.</p>
       </div>
-      {/* Use session-based wrapper instead of hardcoded userId */}
-      <InterestsPickerWithSession />
+      {/* Defaults to userId=1 for now; swap with real session user id when auth is wired */}
+      <InterestsPicker userId={1} />
     </div>
   );
 }

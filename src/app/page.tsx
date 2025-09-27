@@ -10,7 +10,7 @@ export default function Home() {
           <div className="font-semibold">Daily Picks</div>
           <p className="text-sm text-[var(--muted-foreground)]">Handpicked profiles based on your interests</p>
         </div>
-        <DailyPicksRefresh />
+        <DailyPicksRefresh userId={1} />
       </div>
     </>
   );

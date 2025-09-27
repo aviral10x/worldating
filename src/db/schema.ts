@@ -1,4 +1,4 @@
-import { sqliteTable, integer, text, real, unique, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, integer, text, real, unique } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -7,12 +7,9 @@ export const users = sqliteTable('users', {
   location: text('location').notNull(),
   bio: text('bio'),
   avatarUrl: text('avatar_url'),
-  walletAddress: text('wallet_address').unique(),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
-}, (table) => ({
-  walletAddressIdx: index('wallet_address_idx').on(table.walletAddress)
-}));
+});
 
 export const interests = sqliteTable('interests', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -45,15 +42,4 @@ export const dailyPicks = sqliteTable('daily_picks', {
   createdAt: integer('created_at').notNull(),
 }, (table) => ({
   uniqueDailyPick: unique().on(table.userId, table.pickUserId, table.pickedForDate)
-}));
-
-export const sessions = sqliteTable('sessions', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  userId: integer('user_id').references(() => users.id).notNull(),
-  token: text('token').notNull().unique(),
-  createdAt: integer('created_at').notNull(),
-  expiresAt: integer('expires_at').notNull(),
-}, (table) => ({
-  tokenIdx: index('session_token_idx').on(table.token),
-  userIdIdx: index('session_user_id_idx').on(table.userId)
 }));
