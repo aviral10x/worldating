@@ -18,6 +18,7 @@ export async function GET(request: NextRequest) {
       location: users.location,
       bio: users.bio,
       avatarUrl: users.avatarUrl,
+      worldAddress: users.worldAddress,
       createdAt: users.createdAt,
       updatedAt: users.updatedAt
     }).from(users);

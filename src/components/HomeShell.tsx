@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ProfileCard, type Profile } from "@/components/ProfileCard";
 import { DailyPicksRefresh } from "@/components/DailyPicksRefresh";
+import { toast } from "sonner";
+import { MiniKit, Tokens, tokenToDecimals, type PayCommandInput } from "@worldcoin/minikit-js";
+
+const DEST = process.env.NEXT_PUBLIC_MINIKIT_DEST as string | undefined;
 
 export const HomeShell = () => {
   const [picks, setPicks] = useState<Profile[] | null>(null);
@@ -25,6 +29,32 @@ export const HomeShell = () => {
     };
   }, []);
 
+  // Map raw user (from /api/users) to Profile
+  const mapUserToProfile = useCallback((u: any): Profile => {
+    return {
+      id: u.id,
+      name: u.name,
+      age: u.age,
+      distanceKm: Math.round((Math.random() * 6 + 1) * 10) / 10,
+      bio: u.bio || "",
+      tags: [],
+      photoUrl: u.avatarUrl || "/next.svg",
+    };
+  }, []);
+
+  const fetchVerifiedProfiles = useCallback(async (): Promise<Profile[]> => {
+    const token = typeof window !== "undefined" ? localStorage.getItem("bearer_token") : null;
+    const res = await fetch(`/api/users?limit=20`, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const verified = (Array.isArray(data) ? data : []).filter((u: any) => !!u.worldAddress);
+    return verified.map(mapUserToProfile);
+  }, [mapUserToProfile]);
+
   const fetchPicks = useCallback(async () => {
     try {
       setLoading(true);
@@ -38,14 +68,27 @@ export const HomeShell = () => {
       if (!res.ok) throw new Error("Failed to load daily picks");
       const data = await res.json();
       const mapped: Profile[] = (Array.isArray(data) ? data : []).map(mapApiToProfile);
-      setPicks(mapped.slice(0, 3));
+
+      if (mapped.length === 0) {
+        // Fallback to verified profiles (users with worldAddress)
+        const fallback = await fetchVerifiedProfiles();
+        setPicks(fallback.slice(0, 3));
+      } else {
+        setPicks(mapped.slice(0, 3));
+      }
     } catch (e: any) {
       setError(e?.message || "Failed to load daily picks");
-      setPicks([]);
+      // Try verified fallback even if daily picks failed
+      try {
+        const fallback = await fetchVerifiedProfiles();
+        setPicks(fallback.slice(0, 3));
+      } catch {
+        setPicks([]);
+      }
     } finally {
       setLoading(false);
     }
-  }, [mapApiToProfile, userId]);
+  }, [mapApiToProfile, userId, fetchVerifiedProfiles]);
 
   useEffect(() => {
     fetchPicks();
@@ -54,6 +97,72 @@ export const HomeShell = () => {
   const handleAfterRefresh = useCallback(async () => {
     await fetchPicks();
   }, [fetchPicks]);
+
+  const handleStake = useCallback(async (p: Profile) => {
+    try {
+      toast.dismiss();
+      if (!MiniKit.isInstalled()) {
+        toast.error("World App not available. Open inside World App to continue.");
+        return;
+      }
+      if (!DEST) {
+        toast.error("Destination address not configured.");
+        return;
+      }
+
+      toast.loading("Preparing payment...");
+
+      const initRes = await fetch("/api/initiate-payment", { method: "POST" });
+      if (!initRes.ok) throw new Error("Failed to initiate payment");
+      const { id: reference } = await initRes.json();
+
+      const payPayload: PayCommandInput = {
+        reference,
+        to: DEST,
+        tokens: [
+          {
+            symbol: Tokens.WLD,
+            token_amount: tokenToDecimals(0.01, Tokens.WLD).toString(),
+          },
+        ],
+        description: `Stake to ${p.name}: 0.01 WLD`,
+      };
+
+      toast.dismiss();
+      const { finalPayload } = await MiniKit.commandsAsync.pay(payPayload);
+      if (!finalPayload || finalPayload.status === "error") {
+        toast.error("Payment failed or cancelled");
+        return;
+      }
+
+      const confirm = await fetch("/api/confirm-payment", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ payload: finalPayload }),
+      });
+      const confirmJson = await confirm.json();
+      if (!confirm.ok || !confirmJson?.success) {
+        toast.error("Payment not confirmed yet");
+        return;
+      }
+
+      // Record the like in our DB
+      const likeRes = await fetch("/api/likes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ likerId: userId, likedId: p.id }),
+      });
+      if (!likeRes.ok) {
+        // Not fatal for payment, but inform user
+        toast.message("Payment confirmed, but failed to record like");
+      }
+
+      toast.success("Stake confirmed ✅");
+    } catch (e: any) {
+      toast.dismiss();
+      toast.error(e?.message || "Failed to complete stake");
+    }
+  }, [userId]);
 
   return (
     <>
@@ -67,10 +176,10 @@ export const HomeShell = () => {
       ) : error ? (
         <div className="soft-card p-4 text-[var(--destructive)] text-sm">{error}</div>
       ) : picks && picks.length > 0 ? (
-        <ProfileCard profiles={picks} />
+        <ProfileCard profiles={picks} onLike={handleStake} />
       ) : (
         <div className="soft-card p-6 text-sm text-[var(--muted-foreground)]">
-          No picks for today yet. Tap Refresh to generate new matches.
+          No picks for today yet. Showing verified profiles for now, but none are available.
         </div>
       )}
 

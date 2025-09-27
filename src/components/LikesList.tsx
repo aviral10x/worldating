@@ -15,17 +15,19 @@ export const LikesList = ({ onSelect }: { onSelect?: (id: number) => void }) => 
         const bearer = typeof window !== "undefined" ? localStorage.getItem("bearer_token") : null;
         const headers: HeadersInit = {};
         if (bearer) headers["Authorization"] = `Bearer ${bearer}`;
-        const res = await fetch("/api/users?limit=50", { headers });
+        const userId = 1; // TODO: replace with session.user.id when auth is wired
+        const res = await fetch(`/api/likes?userId=${userId}&limit=50`, { headers });
         const data = await res.json();
         if (!mounted) return;
         const mapped: Item[] = (data || []).map((u: any) => {
           const raw = u.avatarUrl || u.avatar_url || "";
           const img = /pravatar\.cc|i\.pravatar\.cc/.test(raw) ? "/vercel.svg" : raw || "/vercel.svg";
+          const likedAt = typeof u.likedAt === "number" ? new Date(u.likedAt) : null;
           return {
             id: u.id,
             name: u.name,
             img,
-            time: "",
+            time: likedAt ? likedAt.toLocaleDateString() : "",
           } as Item;
         });
         setItems(mapped);
@@ -61,7 +63,7 @@ export const LikesList = ({ onSelect }: { onSelect?: (id: number) => void }) => 
                   <span className="text-xs text-[var(--muted-foreground)]">{p.time}</span>
                 ) : null}
               </div>
-              <p className="text-xs text-[var(--muted-foreground)]">view profile</p>
+              <p className="text-xs text-[var(--muted-foreground)]">staked to you</p>
             </div>
             <button
               className="px-3 py-1 text-xs rounded-lg bg-[var(--primary)] text-white hover:brightness-105"
@@ -70,12 +72,12 @@ export const LikesList = ({ onSelect }: { onSelect?: (id: number) => void }) => 
                 onSelect?.(p.id);
               }}
             >
-              Stake
+              View
             </button>
           </li>
         ))}
         {items.length === 0 && (
-          <li className="p-3 text-sm text-[var(--muted-foreground)]">No users yet. Ask friends to register.</li>
+          <li className="p-3 text-sm text-[var(--muted-foreground)]">No stakes yet.</li>
         )}
       </ul>
     </div>
