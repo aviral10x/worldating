@@ -12,7 +12,7 @@ export const HomeShell = () => {
   const [picks, setPicks] = useState<Profile[] | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const userId = 1; // TODO: replace with session.user.id when auth is wired
+  const [userId, setUserId] = useState<number>(1); // TODO: replace with session.user.id when auth is wired
   const allowedNames = useMemo(() => new Set(["aviral", "emily", "lia", "tanya", "vaibhavi"]), []);
   const lastFetchAtRef = useRef<number>(0);
   const inFlightRef = useRef<boolean>(false);
@@ -124,12 +124,12 @@ export const HomeShell = () => {
         return true;
       });
     return uniqueAndAllowed(verified.map(mapUserToProfile));
-  }, [mapUserToProfile, uniqueAndAllowed, getSelfWorldAddress]);
+  }, [mapUserToProfile, uniqueAndAllowed, getSelfWorldAddress, userId]);
 
   const fetchPicks = useCallback(async (force = false) => {
     // Throttle repeat fetches within 15s and prevent concurrent runs
     const now = Date.now();
-    if (inFlightRef.current) return;
+    if (!force && inFlightRef.current) return;
     if (!force && now - lastFetchAtRef.current < 15000 && picks && picks.length > 0) return;
 
     inFlightRef.current = true;
@@ -138,11 +138,12 @@ export const HomeShell = () => {
       if (shouldShowSkeleton) setLoading(true);
       setError(null);
       const token = typeof window !== "undefined" ? localStorage.getItem("bearer_token") : null;
-      const res = await fetch(`/api/daily-picks?userId=${userId}`, {
+      const url = `/api/daily-picks?userId=${userId}${force ? `&t=${Date.now()}` : ""}`;
+      const res = await fetch(url, {
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        cache: "force-cache",
+        cache: force ? "no-store" : "force-cache",
       });
       if (!res.ok) throw new Error("Failed to load daily picks");
       const data = await res.json();
@@ -181,6 +182,13 @@ export const HomeShell = () => {
   }, [mapApiToProfile, userId, fetchVerifiedProfiles, uniqueAndAllowed, getSelfWorldAddress, picks]);
 
   useEffect(() => {
+    // Derive userId from localStorage if present
+    if (typeof window !== "undefined") {
+      const lsId = Number(localStorage.getItem("user_id"));
+      if (Number.isFinite(lsId) && lsId > 0) {
+        setUserId(lsId);
+      }
+    }
     fetchPicks();
   }, [fetchPicks]);
 

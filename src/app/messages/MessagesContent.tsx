@@ -70,6 +70,7 @@ export default function MessagesContent() {
   const autoStartedRef = useRef(false);
   const [userId, setUserId] = useState<number | null>(null);
   const [resolvingUser, setResolvingUser] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
 
   const headers = useMemo(() => {
     const bearer = typeof window !== "undefined" ? localStorage.getItem("bearer_token") : null;
@@ -79,9 +80,10 @@ export default function MessagesContent() {
   }, []);
 
   // Resolve current user from localStorage and by-world API
-  const resolveCurrentUser = useCallback(async () => {
+  const resolveCurrentUser = useCallback(async (): Promise<number | null> => {
     try {
       setResolvingUser(true);
+      let resolvedId: number | null = null;
       const worldAddrRaw = typeof window !== "undefined" ? localStorage.getItem("world_address") : null;
       const lsId = typeof window !== "undefined" ? Number(localStorage.getItem("user_id")) : NaN;
 
@@ -93,31 +95,37 @@ export default function MessagesContent() {
           const me = await meRes.json();
           const id = me?.id ?? me?.user?.id ?? null;
           if (Number.isFinite(id)) {
-            setUserId(id as number);
-            return;
+            resolvedId = id as number;
+            setUserId(resolvedId);
+            return resolvedId;
           }
         }
       }
 
       if (Number.isFinite(lsId) && lsId > 0) {
+        resolvedId = lsId;
         setUserId(lsId);
-        return;
+        return resolvedId;
       }
 
       // Fallback to 1 if nothing else is available
+      resolvedId = 1;
       setUserId(1);
+      return resolvedId;
     } catch {
       setUserId(1);
+      return 1;
     } finally {
       setResolvingUser(false);
     }
   }, [headers]);
 
-  const loadConversations = useCallback(async () => {
+  const loadConversations = useCallback(async (uidOverride?: number) => {
     try {
       setLoadingConvos(true);
-      if (!userId) return [] as Conversation[];
-      const res = await fetch(`/api/conversations?userId=${userId}`, { headers });
+      const uid = uidOverride ?? userId;
+      if (!uid) return [] as Conversation[];
+      const res = await fetch(`/api/conversations?userId=${uid}`, { headers });
       if (!res.ok) throw new Error("Failed to load conversations");
       const raw: any[] = await res.json();
       // Normalize API shape (handles snake_case keys and string IDs)
@@ -160,12 +168,13 @@ export default function MessagesContent() {
     }
   }, [headers, selected, userId]);
 
-  const loadMatches = useCallback(async () => {
+  const loadMatches = useCallback(async (uidOverride?: number) => {
     try {
       setLoadingMatches(true);
       let data: any[] = [];
 
       // Prefer world address, but gracefully fallback to userId if address lookup fails
+      const uid = uidOverride ?? userId;
       if (selfAddress) {
         const resByAddr = await fetch(`/api/matches?address=${encodeURIComponent(selfAddress)}`, { headers });
         if (resByAddr.ok) {
@@ -173,16 +182,16 @@ export default function MessagesContent() {
         } else {
           // If address not found in backend, retry with userId (prevents permanent 404 loop)
           const maybeJson = await resByAddr.json().catch(() => null);
-          if (resByAddr.status === 404 && maybeJson?.code === "USER_NOT_FOUND_BY_ADDRESS" && userId) {
-            const resById = await fetch(`/api/matches?userId=${userId}`, { headers });
+          if (resByAddr.status === 404 && maybeJson?.code === "USER_NOT_FOUND_BY_ADDRESS" && uid) {
+            const resById = await fetch(`/api/matches?userId=${uid}`, { headers });
             if (resById.ok) {
               data = await resById.json();
             } else {
               throw new Error("Failed to load matches");
             }
-          } else if (userId) {
+          } else if (uid) {
             // Unknown error with address; still attempt userId as best-effort
-            const resById = await fetch(`/api/matches?userId=${userId}`, { headers });
+            const resById = await fetch(`/api/matches?userId=${uid}`, { headers });
             if (resById.ok) {
               data = await resById.json();
             } else {
@@ -192,8 +201,8 @@ export default function MessagesContent() {
             throw new Error("Failed to load matches");
           }
         }
-      } else if (userId) {
-        const resById = await fetch(`/api/matches?userId=${userId}`, { headers });
+      } else if (uid) {
+        const resById = await fetch(`/api/matches?userId=${uid}`, { headers });
         if (!resById.ok) throw new Error("Failed to load matches");
         data = await resById.json();
       } else {
@@ -418,6 +427,39 @@ export default function MessagesContent() {
     }
   }, [headers, userId, handleStartChat]);
 
+  // Robust Refresh handler: re-resolve user (if missing), reload convos+matches, preserve/choose selection, reload messages
+  const handleRefresh = useCallback(async () => {
+    try {
+      setRefreshing(true);
+      // Stop existing polling while refreshing
+      if (pollingRef.current) clearInterval(pollingRef.current);
+
+      let ensuredId = userId;
+      if (!ensuredId) {
+        ensuredId = await resolveCurrentUser();
+      }
+      const list = await loadConversations(ensuredId ?? undefined);
+      await loadMatches(ensuredId ?? undefined);
+
+      const keep = selected && list?.find?.(c => c.conversationId === selected.conversationId);
+      const pref = keep || (list?.find?.(c => isTarget(c.otherUser.name, "aviral")) || list?.find?.(c => isTarget(c.otherUser.name, "lia")) || list?.[0] || null);
+
+      if (pref) {
+        setSelected(pref);
+        await loadMessages(pref, true);
+        // Restart polling explicitly even if selection didn't change
+        pollingRef.current = setInterval(() => {
+          loadMessages(pref, true);
+        }, 5000);
+      } else {
+        setMessages([]);
+      }
+      toast.success("Refreshed");
+    } finally {
+      setRefreshing(false);
+    }
+  }, [loadConversations, loadMatches, loadMessages, resolveCurrentUser, selected, userId]);
+
   // Auto-start chat if Aviral/Lia are matched but no conversation exists yet
   useEffect(() => {
     if (loadingConvos || loadingMatches || resolvingUser || !userId) return;
@@ -490,10 +532,10 @@ export default function MessagesContent() {
             <h4 className="font-semibold">Chats</h4>
             <button
               className="px-2 py-1 text-xs rounded-lg bg-[var(--secondary)] hover:brightness-105"
-              onClick={() => { loadConversations(); loadMatches(); }}
-              disabled={loadingConvos}
+              onClick={handleRefresh}
+              disabled={refreshing}
             >
-              Refresh
+              {refreshing ? "Refreshing…" : "Refresh"}
             </button>
           </div>
           <ul className="p-2 max-h-[40vh] overflow-auto">

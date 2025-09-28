@@ -49,13 +49,22 @@ export const ProfileCard = ({ profiles, onLike }: { profiles?: Profile[]; onLike
     );
   }
 
+  // Use custom variants so each exiting card keeps its own direction snapshot
+  const cardVariants = {
+    initial: { opacity: 0, y: 20 },
+    animate: { opacity: 1, y: 0 },
+    exit: (dir: -1 | 1) => ({ opacity: 0, x: 140 * dir, rotate: 2 * dir }),
+  } as const;
+
   return (
     <AnimatePresence mode="wait" initial={false}>
       <motion.div
-        key={current.id}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, x: 140 * exitDir, rotate: 2 * exitDir }}
+        key={`${current.id}-${index}`}
+        variants={cardVariants}
+        initial="initial"
+        animate="animate"
+        exit="exit"
+        custom={exitDir}
         transition={{ duration: 0.25, ease: "easeOut" }}
         className="soft-card overflow-hidden"
       >

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/db';
 import { dailyPicks, users } from '@/db/schema';
-import { eq, and, desc, sql } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 
 export async function GET(request: NextRequest) {
   try {
@@ -15,31 +15,48 @@ export async function GET(request: NextRequest) {
       }, { status: 400 });
     }
 
+    const userIdInt = parseInt(userId);
+
+    // Validate user exists
+    const userExists = await db.select({ id: users.id })
+      .from(users)
+      .where(eq(users.id, userIdInt))
+      .limit(1);
+
+    if (userExists.length === 0) {
+      return NextResponse.json({ 
+        error: "User not found",
+        code: "USER_NOT_FOUND" 
+      }, { status: 404 });
+    }
+
     const today = new Date().toISOString().split('T')[0];
 
     const picks = await db
       .select({
-        id: dailyPicks.id,
         score: dailyPicks.score,
-        pickedForDate: dailyPicks.pickedForDate,
         user: {
           id: users.id,
           name: users.name,
           age: users.age,
           location: users.location,
           bio: users.bio,
-          avatarUrl: users.avatarUrl
+          avatarUrl: users.avatarUrl,
+          worldAddress: users.worldAddress,
+          worldUsername: users.worldUsername,
+          createdAt: users.createdAt,
+          updatedAt: users.updatedAt
         }
       })
       .from(dailyPicks)
       .innerJoin(users, eq(dailyPicks.pickUserId, users.id))
       .where(
         and(
-          eq(dailyPicks.userId, parseInt(userId)),
+          eq(dailyPicks.userId, userIdInt),
           eq(dailyPicks.pickedForDate, today)
         )
       )
-      .orderBy(desc(dailyPicks.score));
+      .orderBy(desc(dailyPicks.score), desc(dailyPicks.createdAt));
 
     return NextResponse.json(picks);
   } catch (error) {
