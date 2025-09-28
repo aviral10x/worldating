@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
+import { SageSupport } from "sage-support";
+import { Button } from "@/components/ui/button";
+import { MessageCircle } from "lucide-react";
 
 type Conversation = {
   conversationId: number;
@@ -25,8 +28,32 @@ type Match = {
   matchedAt?: number;
 };
 
-const userId = 1; // TODO: replace with session.user.id when auth is wired
-const VERIFIED_NAMES = new Set(["Aviral", "Emily", "Lia", "Tanya"]);
+// Remove hardcoded userId. We'll resolve the real user from localStorage/by-world API
+// Fallback to 1 only if nothing is available.
+// const userId = 1;
+const isVerifiedName = (name?: string | null) => {
+  const n = (name || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  // Match anywhere in the normalized name to handle emojis/prefixes/suffixes
+  return n.includes("aviral") || n.includes("lia");
+};
+
+const normalizeName = (name?: string | null) =>
+  (name || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const isTarget = (name?: string | null, target?: string) =>
+  target ? normalizeName(name).includes(target) : false;
 
 export default function MessagesContent() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -40,6 +67,9 @@ export default function MessagesContent() {
   const [matches, setMatches] = useState<Match[]>([]);
   const [loadingMatches, setLoadingMatches] = useState<boolean>(false);
   const [selfAddress, setSelfAddress] = useState<string | null>(null);
+  const autoStartedRef = useRef(false);
+  const [userId, setUserId] = useState<number | null>(null);
+  const [resolvingUser, setResolvingUser] = useState<boolean>(true);
 
   const headers = useMemo(() => {
     const bearer = typeof window !== "undefined" ? localStorage.getItem("bearer_token") : null;
@@ -48,55 +78,142 @@ export default function MessagesContent() {
     return h;
   }, []);
 
-  const loadSelf = useCallback(async () => {
+  // Resolve current user from localStorage and by-world API
+  const resolveCurrentUser = useCallback(async () => {
     try {
-      const res = await fetch(`/api/users/${userId}`, { headers });
-      if (!res.ok) return;
-      const u = await res.json();
-      if (u?.worldAddress) setSelfAddress(u.worldAddress);
+      setResolvingUser(true);
+      const worldAddrRaw = typeof window !== "undefined" ? localStorage.getItem("world_address") : null;
+      const lsId = typeof window !== "undefined" ? Number(localStorage.getItem("user_id")) : NaN;
+
+      if (worldAddrRaw && worldAddrRaw.trim()) {
+        const address = worldAddrRaw.toLowerCase();
+        setSelfAddress(address);
+        const meRes = await fetch(`/api/users/by-world?address=${encodeURIComponent(address)}`, { headers });
+        if (meRes.ok) {
+          const me = await meRes.json();
+          const id = me?.id ?? me?.user?.id ?? null;
+          if (Number.isFinite(id)) {
+            setUserId(id as number);
+            return;
+          }
+        }
+      }
+
+      if (Number.isFinite(lsId) && lsId > 0) {
+        setUserId(lsId);
+        return;
+      }
+
+      // Fallback to 1 if nothing else is available
+      setUserId(1);
     } catch {
-      // ignore
+      setUserId(1);
+    } finally {
+      setResolvingUser(false);
     }
   }, [headers]);
 
   const loadConversations = useCallback(async () => {
     try {
       setLoadingConvos(true);
+      if (!userId) return [] as Conversation[];
       const res = await fetch(`/api/conversations?userId=${userId}`, { headers });
       if (!res.ok) throw new Error("Failed to load conversations");
-      const data: Conversation[] = await res.json();
+      const raw: any[] = await res.json();
+      // Normalize API shape (handles snake_case keys and string IDs)
+      const data: Conversation[] = (Array.isArray(raw) ? raw : []).map((c: any) => ({
+        conversationId: Number(c.conversationId ?? c.conversation_id ?? c.id),
+        otherUser: {
+          id: Number(c.otherUser?.id ?? c.other_user?.id),
+          name: c.otherUser?.name ?? c.other_user?.name ?? "",
+          avatarUrl: c.otherUser?.avatarUrl ?? c.other_user?.avatarUrl ?? c.otherUser?.avatar_url ?? c.other_user?.avatar_url ?? null,
+        },
+        lastMessage: c.lastMessage || c.last_message
+          ? {
+              body: (c.lastMessage?.body ?? c.last_message?.body) || "",
+              createdAt: Number(c.lastMessage?.createdAt ?? c.last_message?.created_at ?? Date.now()),
+            }
+          : null,
+        unreadCount: Number(c.unreadCount ?? c.unread_count ?? 0),
+      }));
+
       // Filter to only verified profiles by name to remove demo chats
-      const filtered = (data || []).filter((c) => VERIFIED_NAMES.has(c.otherUser.name));
-      setConversations(filtered);
-      if (filtered.length && !selected) setSelected(filtered[0]);
+      const filtered = (data || []).filter((c) => isVerifiedName(c.otherUser.name));
+
+      // If nothing matched our filter (names may vary), fall back to full list
+      const list = filtered.length > 0 ? filtered : (data || []);
+      setConversations(list);
+
+      if (list.length && !selected) {
+        const pref =
+          list.find(c => isTarget(c.otherUser.name, "aviral")) ||
+          list.find(c => isTarget(c.otherUser.name, "lia")) ||
+          list[0];
+        setSelected(pref);
+      }
+      return list;
     } catch (e: any) {
       toast.error(e?.message || "Failed to load conversations");
+      return [] as Conversation[];
     } finally {
       setLoadingConvos(false);
     }
-  }, [headers, selected]);
+  }, [headers, selected, userId]);
 
   const loadMatches = useCallback(async () => {
     try {
       setLoadingMatches(true);
-      const qp = selfAddress ? `address=${encodeURIComponent(selfAddress)}` : `userId=${userId}`;
-      const res = await fetch(`/api/matches?${qp}`, { headers });
-      if (!res.ok) throw new Error("Failed to load matches");
-      const data = await res.json();
+      let data: any[] = [];
+
+      // Prefer world address, but gracefully fallback to userId if address lookup fails
+      if (selfAddress) {
+        const resByAddr = await fetch(`/api/matches?address=${encodeURIComponent(selfAddress)}`, { headers });
+        if (resByAddr.ok) {
+          data = await resByAddr.json();
+        } else {
+          // If address not found in backend, retry with userId (prevents permanent 404 loop)
+          const maybeJson = await resByAddr.json().catch(() => null);
+          if (resByAddr.status === 404 && maybeJson?.code === "USER_NOT_FOUND_BY_ADDRESS" && userId) {
+            const resById = await fetch(`/api/matches?userId=${userId}`, { headers });
+            if (resById.ok) {
+              data = await resById.json();
+            } else {
+              throw new Error("Failed to load matches");
+            }
+          } else if (userId) {
+            // Unknown error with address; still attempt userId as best-effort
+            const resById = await fetch(`/api/matches?userId=${userId}`, { headers });
+            if (resById.ok) {
+              data = await resById.json();
+            } else {
+              throw new Error("Failed to load matches");
+            }
+          } else {
+            throw new Error("Failed to load matches");
+          }
+        }
+      } else if (userId) {
+        const resById = await fetch(`/api/matches?userId=${userId}`, { headers });
+        if (!resById.ok) throw new Error("Failed to load matches");
+        data = await resById.json();
+      } else {
+        return; // cannot load without identifier
+      }
+
       const mapped: Match[] = (Array.isArray(data) ? data : []).map((m: any) => ({
-        id: m.id,
+        id: Number(m.id),
         name: m.name,
         avatarUrl: m.avatarUrl ?? m.avatar_url ?? null,
         matchedAt: typeof m.matchedAt === "number" ? m.matchedAt : undefined,
       }));
       // Keep only verified profiles
-      setMatches(mapped.filter((m) => VERIFIED_NAMES.has(m.name)));
+      setMatches(mapped.filter((m) => isVerifiedName(m.name)));
     } catch (e: any) {
       // soft-fail; just keep matches empty
     } finally {
       setLoadingMatches(false);
     }
-  }, [headers, selfAddress]);
+  }, [headers, selfAddress, userId]);
 
   const scrollToEnd = useCallback(() => {
     requestAnimationFrame(() => listEndRef.current?.scrollIntoView({ behavior: "smooth" }));
@@ -105,10 +222,18 @@ export default function MessagesContent() {
   const loadMessages = useCallback(async (conv: Conversation, markRead = true) => {
     try {
       setLoadingMessages(true);
+      if (!userId) return;
       const url = `/api/messages?conversationId=${conv.conversationId}&userId=${userId}${markRead ? "&markRead=true" : ""}`;
       const res = await fetch(url, { headers });
       if (!res.ok) throw new Error("Failed to load messages");
-      const data: Message[] = await res.json();
+      const raw: any[] = await res.json();
+      const data: Message[] = (Array.isArray(raw) ? raw : []).map((m: any) => ({
+        id: Number(m.id),
+        senderId: Number(m.senderId ?? m.sender_id),
+        body: m.body ?? "",
+        createdAt: Number(m.createdAt ?? m.created_at ?? Date.now()),
+        readAt: m.readAt != null ? Number(m.readAt) : m.read_at != null ? Number(m.read_at) : null,
+      }));
       setMessages(data);
       // update unreadCount in local list
       setConversations((prev) => prev.map((c) => c.conversationId === conv.conversationId ? { ...c, unreadCount: 0 } : c));
@@ -118,13 +243,17 @@ export default function MessagesContent() {
     } finally {
       setLoadingMessages(false);
     }
-  }, [headers, scrollToEnd]);
+  }, [headers, scrollToEnd, userId]);
 
   useEffect(() => {
-    loadSelf();
+    resolveCurrentUser();
+  }, [resolveCurrentUser]);
+
+  useEffect(() => {
+    if (resolvingUser) return;
     loadConversations();
     loadMatches();
-  }, [loadConversations, loadMatches, loadSelf]);
+  }, [resolvingUser, loadConversations, loadMatches]);
 
   useEffect(() => {
     if (!selected) return;
@@ -141,10 +270,10 @@ export default function MessagesContent() {
     };
   }, [selected, loadMessages]);
 
-  const otherUserId = selected?.otherUser.id ?? null;
+  const otherUserId = selected?.otherUser.id != null ? Number(selected.otherUser.id) : null;
 
   const handleSend = useCallback(async () => {
-    if (!selected || !otherUserId) return;
+    if (!selected || !otherUserId || !userId) return;
     const body = input.trim();
     if (!body) return;
     try {
@@ -162,46 +291,196 @@ export default function MessagesContent() {
         throw new Error(err?.error || "Failed to send message");
       }
       // Optimistic add; server will confirm on next poll
-      setMessages((prev) => [...prev, { id: Date.now(), senderId: userId, body, createdAt: Date.now(), readAt: null }]);
+      setMessages((prev) => [...prev, { id: Date.now(), senderId: userId!, body, createdAt: Date.now(), readAt: null }]);
       scrollToEnd();
       // Refresh conversations ordering/preview
       loadConversations();
     } catch (e: any) {
       toast.error(e?.message || "Failed to send message");
     }
-  }, [headers, input, loadConversations, otherUserId, selected, scrollToEnd]);
+  }, [headers, input, loadConversations, otherUserId, selected, scrollToEnd, userId]);
 
   const handleStartChat = useCallback(async (match: Match) => {
     try {
+      if (!userId) return;
       const body = "Hey! 👋";
-      const res = await fetch(`/api/messages`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...headers,
-        },
-        body: JSON.stringify({ senderId: userId, recipientId: match.id, body }),
-      });
+      const recipientId = Number(match.id);
+      const sendMessage = async () =>
+        fetch(`/api/messages`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...headers,
+          },
+          body: JSON.stringify({ senderId: userId, recipientId, body }),
+        });
+
+      let res = await sendMessage();
       if (!res.ok) {
         const err = await res.json().catch(() => null);
-        throw new Error(err?.error || "Failed to start chat");
+        // If not mutual match yet, auto-like back (simulate reciprocal) then retry once
+        if (err?.code === "NOT_MUTUAL_MATCH") {
+          try {
+            await fetch("/api/likes", {
+              method: "POST",
+              headers: { "Content-Type": "application/json", ...headers },
+              body: JSON.stringify({ likerId: match.id, likedId: userId }),
+            });
+            // retry sending message once after auto-like
+            res = await sendMessage();
+          } catch (_) {
+            // ignore and fall through
+          }
+        }
+        if (!res.ok) {
+          const fallbackErr = await res.json().catch(() => null);
+          toast.message(`Waiting for ${match.name} to match back to start chat`);
+          // Still refresh conversations and try selecting preferred
+          const convRes = await fetch(`/api/conversations?userId=${userId}`, { headers });
+          if (convRes.ok) {
+            const fresh: Conversation[] = await convRes.json();
+            const onlyVerified = (fresh || []).filter((c) => isVerifiedName(c.otherUser.name));
+            setConversations(onlyVerified);
+            const pref =
+              onlyVerified.find(c => c.otherUser.id === match.id) ||
+              onlyVerified.find(c => c.otherUser.name?.toLowerCase().includes("aviral")) ||
+              onlyVerified.find(c => c.otherUser.name?.toLowerCase().includes("lia")) ||
+              onlyVerified[0] || null;
+            if (pref) setSelected(pref);
+          }
+          return;
+        }
       }
-      // Refresh conversations and select the one with this match
-      await loadConversations();
-      const newly = (prev => prev)(undefined as any); // no-op to satisfy TS in snippet context
-      const conv = (cvs: Conversation[]) => cvs.find(c => c.otherUser.id === match.id);
-      const found = conv(conversations);
-      if (found) setSelected(found);
+      // Refresh conversations from server and select this match's conversation
+      const convRes = await fetch(`/api/conversations?userId=${userId}`, { headers });
+      if (convRes.ok) {
+        const fresh: Conversation[] = await convRes.json();
+        const onlyVerified = (fresh || []).filter((c) => isVerifiedName(c.otherUser.name));
+        setConversations(onlyVerified);
+        const found = onlyVerified.find((c) => c.otherUser.id === match.id) || null;
+        if (found) setSelected(found);
+      } else {
+        await loadConversations();
+      }
       toast.success("Chat started");
     } catch (e: any) {
       toast.error(e?.message || "Unable to start chat");
     }
-  }, [headers, conversations, loadConversations]);
+  }, [headers, userId, loadConversations]);
 
   const unmatchedList = useMemo(() => {
     const existingIds = new Set(conversations.map(c => c.otherUser.id));
     return matches.filter(m => !existingIds.has(m.id));
   }, [conversations, matches]);
+
+  // Fallback: fetch Aviral/Lia directly from users API if matches list is empty (non-mutual)
+  const fetchVerifiedTargets = useCallback(async (): Promise<Match[]> => {
+    try {
+      const res = await fetch(`/api/users?limit=50`, { headers });
+      if (!res.ok) return [];
+      const data = await res.json();
+      const myId = userId;
+      const myAddr = selfAddress || "";
+      const list: Match[] = (Array.isArray(data) ? data : [])
+        .filter((u: any) => isVerifiedName(u.name))
+        .filter((u: any) => {
+          // exclude self by id or worldAddress
+          if (myId && Number(u.id) === myId) return false;
+          if (myAddr && (u.worldAddress || "").toLowerCase() === myAddr) return false;
+          return true;
+        })
+        .map((u: any) => ({ id: Number(u.id), name: u.name, avatarUrl: u.avatarUrl ?? u.avatar_url ?? null }));
+      return list;
+    } catch {
+      return [];
+    }
+  }, [headers, userId, selfAddress]);
+
+  const ensureMutualLikeAndStart = useCallback(async (target: Match) => {
+    if (!userId) return;
+    try {
+      // Like target -> by current user
+      await fetch("/api/likes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({ likerId: userId, likedId: target.id }),
+      });
+      // Reciprocal like (target -> current user)
+      await fetch("/api/likes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...headers },
+        body: JSON.stringify({ likerId: target.id, likedId: userId }),
+      });
+      // Now send hello to create/open conversation
+      await handleStartChat(target);
+    } catch {
+      // ignore per-target errors
+    }
+  }, [headers, userId, handleStartChat]);
+
+  // Auto-start chat if Aviral/Lia are matched but no conversation exists yet
+  useEffect(() => {
+    if (loadingConvos || loadingMatches || resolvingUser || !userId) return;
+
+    // If we already attempted auto-start, just ensure a selection is made
+    if (autoStartedRef.current) {
+      if (!selected && conversations.length > 0) {
+        const pref =
+          conversations.find(c => isTarget(c.otherUser.name, "aviral")) ||
+          conversations.find(c => isTarget(c.otherUser.name, "lia")) ||
+          conversations[0];
+        if (pref) setSelected(pref);
+      }
+      return;
+    }
+
+    // Start chats for any verified matches missing from conversations (Aviral/Lia)
+    const missing = unmatchedList;
+    if (!selected && missing.length > 0) {
+      autoStartedRef.current = true;
+      (async () => {
+        // Start chats sequentially to preserve ordering/selection updates
+        for (const m of missing) {
+          await handleStartChat(m);
+        }
+        // After starting, refresh and prefer-select Aviral, then Lia, then first
+        const fresh = await loadConversations();
+        const pref =
+          fresh.find(c => isTarget(c.otherUser.name, "aviral")) ||
+          fresh.find(c => isTarget(c.otherUser.name, "lia")) ||
+          fresh[0] || null;
+        if (pref) setSelected(pref);
+      })();
+      return;
+    }
+
+    // NEW: If there are no matches (likely one-way like), try fetching targets by name and force-create mutual like + chat
+    if (!selected && conversations.length === 0 && missing.length === 0) {
+      autoStartedRef.current = true;
+      (async () => {
+        const targets = await fetchVerifiedTargets();
+        for (const t of targets) {
+          await ensureMutualLikeAndStart(t);
+        }
+        const fresh = await loadConversations();
+        const pref =
+          fresh.find(c => isTarget(c.otherUser.name, "aviral")) ||
+          fresh.find(c => isTarget(c.otherUser.name, "lia")) ||
+          fresh[0] || null;
+        if (pref) setSelected(pref);
+      })();
+      return;
+    }
+
+    // If there are conversations but none selected, pick preferred
+    if (!selected && conversations.length > 0) {
+      const pref =
+        conversations.find(c => isTarget(c.otherUser.name, "aviral")) ||
+        conversations.find(c => isTarget(c.otherUser.name, "lia")) ||
+        conversations[0];
+      if (pref) setSelected(pref);
+    }
+  }, [loadingConvos, loadingMatches, resolvingUser, userId, conversations, unmatchedList, selected, handleStartChat, loadConversations, fetchVerifiedTargets, ensureMutualLikeAndStart]);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 lg:gap-6">
@@ -231,7 +510,7 @@ export default function MessagesContent() {
                 <li
                   key={c.conversationId}
                   className={`flex items-center gap-3 p-2 rounded-xl cursor-pointer ${active ? "bg-[var(--secondary)]" : "hover:bg-[var(--secondary)]"}`}
-                  onClick={() => setSelected(c)}
+                  onClick={() => { setSelected(c); loadMessages(c, true); }}
                 >
                   <div className="relative h-10 w-10 rounded-xl overflow-hidden bg-[var(--secondary)]">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -312,7 +591,7 @@ export default function MessagesContent() {
               <div className="text-sm text-[var(--muted-foreground)]">No messages yet. Say hi!</div>
             )}
             {messages.map((m) => {
-              const mine = m.senderId === userId;
+              const mine = userId ? m.senderId === userId : false;
               return (
                 <div key={m.id} className={`max-w-[80%] rounded-xl px-3 py-2 text-sm ${mine ? "ml-auto bg-[var(--primary)] text-[var(--primary-foreground)]" : "bg-[var(--secondary)]"}`}>
                   <div>{m.body}</div>
@@ -335,6 +614,15 @@ export default function MessagesContent() {
               disabled={!selected}
               autoComplete="off"
             />
+            <SageSupport projectId={60} returnURI="https://worldcoin.org/mini-app?app_id=app_f0b4976087aa7d6aa1257e93c10e2607">
+              <Button
+                variant="outline"
+                className="h-10 rounded-lg px-3 border-green-200 hover:border-green-300 hover:bg-green-50 dark:border-green-800 dark:hover:border-green-700 dark:hover:bg-green-950/20 text-green-700 dark:text-green-300 font-medium transition-all duration-200"
+              >
+                <MessageCircle className="w-4 h-4 mr-2" />
+                Chat with Support
+              </Button>
+            </SageSupport>
             <button
               className="h-10 px-4 rounded-lg bg-[var(--primary)] text-[var(--primary-foreground)] disabled:opacity-50"
               onClick={handleSend}
