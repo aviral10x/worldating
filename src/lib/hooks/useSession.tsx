@@ -1,6 +1,13 @@
 "use client";
 
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useAccount, useChainId, useDisconnect } from "wagmi";
 import { useSignMessage } from "wagmi";
 
@@ -17,9 +24,15 @@ interface SessionContextValue {
   signOut: () => Promise<void>;
 }
 
-const SessionContext = createContext<SessionContextValue | undefined>(undefined);
+const SessionContext = createContext<SessionContextValue | undefined>(
+  undefined
+);
 
-export const SessionProvider = ({ children }: { children: React.ReactNode }) => {
+export const SessionProvider = ({
+  children,
+}: {
+  children: React.ReactNode;
+}) => {
   const [user, setUser] = useState<SessionUser>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
@@ -32,9 +45,18 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
     setIsLoading(true);
     try {
       // Include bearer token if present to allow session without cookie
-      const token = typeof window !== "undefined" ? localStorage.getItem("bearer_token") : null;
-      const headers: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {};
-      const res = await fetch("/api/session", { credentials: "include", headers, cache: "no-store" });
+      const token =
+        typeof window !== "undefined"
+          ? localStorage.getItem("bearer_token")
+          : null;
+      const headers: HeadersInit = token
+        ? { Authorization: `Bearer ${token}` }
+        : {};
+      const res = await fetch("/api/session", {
+        credentials: "include",
+        headers,
+        cache: "no-store",
+      });
       const data = await res.json();
       setUser(data?.user ?? null);
     } catch (e) {
@@ -57,7 +79,9 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
 
     const signWithNonce = async () => {
       // 1) Get nonce
-      const nonceRes = await fetch("/api/siwe/nonce", { credentials: "include" });
+      const nonceRes = await fetch("/api/siwe/nonce", {
+        credentials: "include",
+      });
       const { nonce } = await nonceRes.json();
 
       // 2) Build SIWE message (EIP-4361)
@@ -65,7 +89,7 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
       const origin = window.location.origin;
       const issuedAt = new Date().toISOString();
 
-      const message = `${domain} wants you to sign in with your Ethereum account:\n${address}\n\nSign in to LavenDate.\n\nURI: ${origin}\nVersion: 1\nChain ID: ${chainId}\nNonce: ${nonce}\nIssued At: ${issuedAt}`;
+      const message = `${domain} wants you to sign in with your Ethereum account:\n${address}\n\nSign in to WorlDate.\n\nURI: ${origin}\nVersion: 1\nChain ID: ${chainId}\nNonce: ${nonce}\nIssued At: ${issuedAt}`;
 
       // 3) Sign message
       const signature = await signMessageAsync({ message });
@@ -79,7 +103,9 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
       });
 
       if (!verifyRes.ok) {
-        const err = await verifyRes.json().catch(async () => ({ raw: await verifyRes.text() }));
+        const err = await verifyRes
+          .json()
+          .catch(async () => ({ raw: await verifyRes.text() }));
         const code = err?.code;
         const messageText = err?.error || err?.raw || "Failed to verify SIWE";
         throw Object.assign(new Error(messageText), { code });
@@ -87,11 +113,16 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
 
       const verified = await verifyRes.json();
       if (verified?.bearer_token) {
-        try { localStorage.setItem("bearer_token", verified.bearer_token); } catch {}
+        try {
+          localStorage.setItem("bearer_token", verified.bearer_token);
+        } catch {}
       }
       // Optimistically set user to update UI immediately
       if (verified?.user?.id) {
-        setUser({ id: verified.user.id, walletAddress: verified.user.walletAddress ?? null });
+        setUser({
+          id: verified.user.id,
+          walletAddress: verified.user.walletAddress ?? null,
+        });
       }
     };
 
@@ -116,16 +147,26 @@ export const SessionProvider = ({ children }: { children: React.ReactNode }) => 
 
   const signOut = useCallback(async () => {
     try {
-      await fetch("/api/siwe/logout", { method: "POST", credentials: "include" });
+      await fetch("/api/siwe/logout", {
+        method: "POST",
+        credentials: "include",
+      });
     } finally {
-      try { localStorage.removeItem("bearer_token"); } catch {}
+      try {
+        localStorage.removeItem("bearer_token");
+      } catch {}
       setUser(null);
       // optionally disconnect wallet to avoid confusion
-      try { disconnect(); } catch {}
+      try {
+        disconnect();
+      } catch {}
     }
   }, [disconnect]);
 
-  const value = useMemo(() => ({ user, isLoading, refetch, signIn, signOut }), [user, isLoading, refetch, signIn, signOut]);
+  const value = useMemo(
+    () => ({ user, isLoading, refetch, signIn, signOut }),
+    [user, isLoading, refetch, signIn, signOut]
+  );
 
   return (
     <SessionContext.Provider value={value}>{children}</SessionContext.Provider>

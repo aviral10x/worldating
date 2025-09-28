@@ -10,7 +10,12 @@ import { Button } from "@/components/ui/button";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [form, setForm] = useState({ name: "", email: "", password: "", confirm: "" });
+  const [form, setForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+    confirm: "",
+  });
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -49,7 +54,9 @@ export default function RegisterPage() {
     <div className="min-h-[60svh] flex items-center justify-center">
       <div className="soft-card w-full max-w-md p-6">
         <h1 className="text-xl font-semibold mb-1">Create your account</h1>
-        <p className="text-sm text-[var(--muted-foreground)] mb-6">Join LavenDate in seconds</p>
+        <p className="text-sm text-[var(--muted-foreground)] mb-6">
+          Join WorlDate in seconds
+        </p>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="name">Name</Label>
@@ -72,7 +79,9 @@ export default function RegisterPage() {
               autoComplete="email"
               required
               value={form.email}
-              onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, email: e.target.value }))
+              }
               placeholder="you@example.com"
             />
           </div>
@@ -84,7 +93,9 @@ export default function RegisterPage() {
               autoComplete="off"
               required
               value={form.password}
-              onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, password: e.target.value }))
+              }
               placeholder="••••••••"
             />
           </div>
@@ -96,7 +107,9 @@ export default function RegisterPage() {
               autoComplete="off"
               required
               value={form.confirm}
-              onChange={(e) => setForm((f) => ({ ...f, confirm: e.target.value }))}
+              onChange={(e) =>
+                setForm((f) => ({ ...f, confirm: e.target.value }))
+              }
               placeholder="••••••••"
             />
           </div>
@@ -104,7 +117,10 @@ export default function RegisterPage() {
             {submitting ? "Creating account..." : "Create account"}
           </Button>
           <p className="text-xs text-center text-[var(--muted-foreground)]">
-            Already have an account? <a href="/login" className="text-[var(--primary)] hover:underline">Sign in</a>
+            Already have an account?{" "}
+            <a href="/login" className="text-[var(--primary)] hover:underline">
+              Sign in
+            </a>
           </p>
         </form>
       </div>

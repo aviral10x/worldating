@@ -11,9 +11,14 @@ export const Header = () => {
 
   useEffect(() => {
     // Initialize theme from localStorage or system preference
-    const stored = typeof window !== "undefined" ? localStorage.getItem("theme") : null;
-    const prefersDark = typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
-    const initial = (stored as "light" | "dark" | null) ?? (prefersDark ? "dark" : "light");
+    const stored =
+      typeof window !== "undefined" ? localStorage.getItem("theme") : null;
+    const prefersDark =
+      typeof window !== "undefined" &&
+      window.matchMedia &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches;
+    const initial =
+      (stored as "light" | "dark" | null) ?? (prefersDark ? "dark" : "light");
     setTheme(initial);
     const root = document.documentElement;
     root.classList.toggle("dark", initial === "dark");
@@ -34,17 +39,29 @@ export const Header = () => {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 h-14 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <div className="h-8 w-8 rounded-xl bg-[var(--primary)]" />
-          <span className="font-semibold text-lg">LavenDate</span>
+          <span className="font-semibold text-lg">WorlDate</span>
         </div>
         <nav className="hidden sm:flex items-center gap-6 text-sm">
-          <Link href="/support" className={`${pathname === "/support" ? "text-[var(--primary)]" : ""} hover:text-[var(--primary)]`}>Support</Link>
-          <Link href="/faq" className={`${pathname === "/faq" ? "text-[var(--primary)]" : ""} hover:text-[var(--primary)]`}>FAQ</Link>
+          <Link
+            href="/support"
+            className={`${pathname === "/support" ? "text-[var(--primary)]" : ""} hover:text-[var(--primary)]`}
+          >
+            Support
+          </Link>
+          <Link
+            href="/faq"
+            className={`${pathname === "/faq" ? "text-[var(--primary)]" : ""} hover:text-[var(--primary)]`}
+          >
+            FAQ
+          </Link>
         </nav>
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={toggleTheme}
-            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label={
+              theme === "dark" ? "Switch to light mode" : "Switch to dark mode"
+            }
             className="p-2 rounded-xl border border-[var(--border)] bg-[var(--card)] text-[var(--card-foreground)] hover:border-[var(--ring)] transition-colors"
           >
             {theme === "dark" ? (
@@ -53,7 +70,11 @@ export const Header = () => {
               <Moon className="h-5 w-5" />
             )}
           </button>
-          <Link href="/search" className="sm:hidden p-2 rounded-xl border" aria-label="Search">
+          <Link
+            href="/search"
+            className="sm:hidden p-2 rounded-xl border"
+            aria-label="Search"
+          >
             <Search className="h-5 w-5" />
           </Link>
         </div>
