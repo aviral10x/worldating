@@ -5,8 +5,6 @@ import { useEffect, useState } from "react";
 
 type Item = { id: number; name: string; img: string; time?: string };
 
-const VERIFIED_NAMES = new Set(["Aviral", "Emily", "Lia", "Tanya"]);
-
 export const LikesList = ({ onSelect }: { onSelect?: (id: number) => void }) => {
   const [items, setItems] = useState<Item[]>([]);
 
@@ -17,7 +15,31 @@ export const LikesList = ({ onSelect }: { onSelect?: (id: number) => void }) => 
         const bearer = typeof window !== "undefined" ? localStorage.getItem("bearer_token") : null;
         const headers: HeadersInit = {};
         if (bearer) headers["Authorization"] = `Bearer ${bearer}`;
-        const userId = 1; // TODO: replace with session.user.id when auth is wired
+
+        // Resolve current user's id via world address -> user lookup, with fallback to stored user_id
+        let userId: number | null = null;
+        const worldAddr = typeof window !== "undefined" ? localStorage.getItem("world_address") : null;
+        if (worldAddr) {
+          try {
+            const ures = await fetch(`/api/users/by-world?address=${encodeURIComponent(worldAddr)}`, { headers });
+            if (ures.ok) {
+              const u = await ures.json();
+              if (u?.id && Number.isInteger(u.id)) userId = u.id as number;
+            }
+          } catch (_) {
+            // ignore lookup errors and fallback
+          }
+        }
+        if (!userId) {
+          const storedId = typeof window !== "undefined" ? Number(localStorage.getItem("user_id")) : NaN;
+          if (!Number.isNaN(storedId) && storedId > 0) userId = storedId;
+        }
+        if (!userId) {
+          // no way to resolve current user -> nothing to load
+          if (mounted) setItems([]);
+          return;
+        }
+
         const res = await fetch(`/api/likes?userId=${userId}&limit=50`, { headers });
         const data = await res.json();
         if (!mounted) return;
@@ -32,8 +54,8 @@ export const LikesList = ({ onSelect }: { onSelect?: (id: number) => void }) => 
             time: likedAt ? likedAt.toLocaleDateString() : "",
           } as Item;
         });
-        // Keep only verified profiles by name to remove demo data
-        setItems(mapped.filter((i) => VERIFIED_NAMES.has(i.name)));
+        // Show all users who staked on you (no name-based filtering)
+        setItems(mapped);
       } catch (_) {
         // ignore
       }

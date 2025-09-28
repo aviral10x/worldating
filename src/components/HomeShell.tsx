@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { ProfileCard, type Profile } from "@/components/ProfileCard";
 import { DailyPicksRefresh } from "@/components/DailyPicksRefresh";
 import { toast } from "sonner";
@@ -13,7 +13,31 @@ export const HomeShell = () => {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const userId = 1; // TODO: replace with session.user.id when auth is wired
-  const allowedNames = useMemo(() => new Set(["Aviral", "Emily", "Lia", "Tanya"]), []);
+  const allowedNames = useMemo(() => new Set(["aviral", "emily", "lia", "tanya", "vaibhavi"]), []);
+  const lastFetchAtRef = useRef<number>(0);
+  const inFlightRef = useRef<boolean>(false);
+
+  // Custom image overrides for specific names
+  const getCustomPhoto = useCallback((name: string, fallback: string) => {
+    const n = (name || "")
+      .toLowerCase()
+      .trim()
+      .split(/\s+/)[0]
+      .replace(/[^a-z]/g, "");
+    const overrides: Record<string, string> = {
+      emily:
+        "https://slelguoygbfzlpylpxfs.supabase.co/storage/v1/object/public/document-uploads/2025-09-28-04.24.15-1759013680826.jpg",
+      tanya:
+        "https://slelguoygbfzlpylpxfs.supabase.co/storage/v1/object/public/document-uploads/2025-09-28-04.24.29-1759013686197.jpg",
+    };
+    return overrides[n] || fallback;
+  }, []);
+
+  const getSelfWorldAddress = useCallback(() => {
+    if (typeof window === "undefined") return "";
+    const addr = localStorage.getItem("world_address") || "";
+    return addr.toLowerCase();
+  }, []);
 
   const mapApiToProfile = useCallback((item: any): Profile => {
     const u = item.user;
@@ -26,9 +50,9 @@ export const HomeShell = () => {
       bio: u.bio || "",
       // Tags not yet on API for users; show empty for now
       tags: [],
-      photoUrl: u.avatarUrl || "/next.svg",
+      photoUrl: getCustomPhoto(u.name, u.avatarUrl || "/next.svg"),
     };
-  }, []);
+  }, [getCustomPhoto]);
 
   // Map raw user (from /api/users) to Profile
   const mapUserToProfile = useCallback((u: any): Profile => {
@@ -39,22 +63,46 @@ export const HomeShell = () => {
       distanceKm: Math.round((Math.random() * 6 + 1) * 10) / 10,
       bio: u.bio || "",
       tags: [],
-      photoUrl: u.avatarUrl || "/next.svg",
+      photoUrl: getCustomPhoto(u.name, u.avatarUrl || "/next.svg"),
     };
-  }, []);
+  }, [getCustomPhoto]);
 
   const uniqueAndAllowed = useCallback((profiles: Profile[]) => {
-    // keep only Aviral, Emily, Lia, Tanya and remove duplicates by name
+    // keep only allowed names and remove duplicates by name (case-insensitive, first-name only, strip emojis/punctuation)
+    const normalize = (name: string) =>
+      (name || "")
+        .toLowerCase()
+        .trim()
+        .split(/\s+/)[0]
+        .replace(/[^a-z]/g, "");
+
     const seen = new Set<string>();
     const filtered: Profile[] = [];
     for (const p of profiles) {
-      if (!allowedNames.has(p.name)) continue;
-      if (seen.has(p.name)) continue;
-      seen.add(p.name);
+      const n = normalize(p.name);
+      if (!allowedNames.has(n)) continue;
+      if (seen.has(n)) continue;
+      seen.add(n);
       filtered.push(p);
     }
     return filtered;
   }, [allowedNames]);
+
+  // Ensure Emily and Vaibhavi appear first within the limited picks
+  const pickTop = useCallback((profiles: Profile[], limit = 3) => {
+    const normalize = (name: string) =>
+      (name || "")
+        .toLowerCase()
+        .trim()
+        .split(/\s+/)[0]
+        .replace(/[^a-z]/g, "");
+    const score = (p: Profile) => {
+      const n = normalize(p.name);
+      if (n === "emily" || n === "vaibhavi") return 2;
+      return 1;
+    };
+    return [...profiles].sort((a, b) => score(b) - score(a)).slice(0, limit);
+  }, []);
 
   const fetchVerifiedProfiles = useCallback(async (): Promise<Profile[]> => {
     const token = typeof window !== "undefined" ? localStorage.getItem("bearer_token") : null;
@@ -62,55 +110,82 @@ export const HomeShell = () => {
       headers: {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
+      cache: "force-cache",
     });
     if (!res.ok) return [];
     const data = await res.json();
-    const verified = (Array.isArray(data) ? data : []).filter((u: any) => !!u.worldAddress);
+    const selfAddr = getSelfWorldAddress();
+    const verified = (Array.isArray(data) ? data : [])
+      // Exclude current user by world address, fallback to id
+      .filter((u: any) => {
+        const w = (u.worldAddress || "").toLowerCase();
+        if (selfAddr && w === selfAddr) return false;
+        if (!selfAddr && u.id === userId) return false;
+        return true;
+      });
     return uniqueAndAllowed(verified.map(mapUserToProfile));
-  }, [mapUserToProfile, uniqueAndAllowed]);
+  }, [mapUserToProfile, uniqueAndAllowed, getSelfWorldAddress]);
 
-  const fetchPicks = useCallback(async () => {
+  const fetchPicks = useCallback(async (force = false) => {
+    // Throttle repeat fetches within 15s and prevent concurrent runs
+    const now = Date.now();
+    if (inFlightRef.current) return;
+    if (!force && now - lastFetchAtRef.current < 15000 && picks && picks.length > 0) return;
+
+    inFlightRef.current = true;
+    const shouldShowSkeleton = !picks || picks.length === 0;
     try {
-      setLoading(true);
+      if (shouldShowSkeleton) setLoading(true);
       setError(null);
       const token = typeof window !== "undefined" ? localStorage.getItem("bearer_token") : null;
       const res = await fetch(`/api/daily-picks?userId=${userId}`, {
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
+        cache: "force-cache",
       });
       if (!res.ok) throw new Error("Failed to load daily picks");
       const data = await res.json();
-      const mappedRaw: Profile[] = (Array.isArray(data) ? data : []).map(mapApiToProfile);
+      const selfAddr = getSelfWorldAddress();
+      const filteredRaw = (Array.isArray(data) ? data : []).filter((item: any) => {
+        const u = item?.user || {};
+        const w = (u.worldAddress || "").toLowerCase();
+        if (selfAddr && w === selfAddr) return false;
+        if (!selfAddr && u.id === userId) return false;
+        return true;
+      });
+      const mappedRaw: Profile[] = filteredRaw.map(mapApiToProfile);
       const mapped = uniqueAndAllowed(mappedRaw);
 
       if (mapped.length === 0) {
         // Fallback to verified profiles (users with worldAddress)
         const fallback = await fetchVerifiedProfiles();
-        setPicks(fallback.slice(0, 3));
+        setPicks(prev => (prev && prev.length > 0 ? prev : pickTop(fallback)));
       } else {
-        setPicks(mapped.slice(0, 3));
+        setPicks(pickTop(mapped));
       }
+      lastFetchAtRef.current = Date.now();
     } catch (e: any) {
       setError(e?.message || "Failed to load daily picks");
       // Try verified fallback even if daily picks failed
       try {
         const fallback = await fetchVerifiedProfiles();
-        setPicks(fallback.slice(0, 3));
+        setPicks(prev => (prev && prev.length > 0 ? prev : pickTop(fallback)));
       } catch {
-        setPicks([]);
+        setPicks(prev => prev ?? []);
       }
     } finally {
-      setLoading(false);
+      inFlightRef.current = false;
+      if (shouldShowSkeleton) setLoading(false);
     }
-  }, [mapApiToProfile, userId, fetchVerifiedProfiles, uniqueAndAllowed]);
+  }, [mapApiToProfile, userId, fetchVerifiedProfiles, uniqueAndAllowed, getSelfWorldAddress, picks]);
 
   useEffect(() => {
     fetchPicks();
   }, [fetchPicks]);
 
   const handleAfterRefresh = useCallback(async () => {
-    await fetchPicks();
+    await fetchPicks(true);
   }, [fetchPicks]);
 
   const handleStake = useCallback(async (p: Profile) => {
@@ -161,15 +236,36 @@ export const HomeShell = () => {
         return;
       }
 
-      // Record the like in our DB
-      const likeRes = await fetch("/api/likes", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ likerId: userId, likedId: p.id }),
-      });
-      if (!likeRes.ok) {
-        // Not fatal for payment, but inform user
-        toast.message("Payment confirmed, but failed to record like");
+      try {
+        const bearer = typeof window !== "undefined" ? localStorage.getItem("bearer_token") : null;
+        const worldAddrRaw = typeof window !== "undefined" ? localStorage.getItem("world_address") : null;
+        const headers: HeadersInit = { "Content-Type": "application/json" };
+        if (bearer) headers["Authorization"] = `Bearer ${bearer}`;
+
+        let likerId: number | null = null;
+        const worldAddress = worldAddrRaw ? worldAddrRaw.toLowerCase() : null;
+        if (worldAddress) {
+          const meRes = await fetch(`/api/users/by-world?address=${encodeURIComponent(worldAddress)}`, { headers });
+          if (meRes.ok) {
+            const meJson = await meRes.json();
+            likerId = meJson?.id ?? meJson?.user?.id ?? null;
+          }
+        }
+        if (!likerId) {
+          const lsId = typeof window !== "undefined" ? Number(localStorage.getItem("user_id")) : NaN;
+          likerId = Number.isFinite(lsId) && lsId > 0 ? lsId : userId;
+        }
+
+        const likeRes = await fetch("/api/likes", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ likerId, likedId: p.id }),
+        });
+        if (!likeRes.ok) {
+          // Soft warning only; payment already succeeded
+        }
+      } catch (_) {
+        // Swallow errors so UX continues after payment confirmation
       }
 
       toast.success("Stake confirmed ✅");

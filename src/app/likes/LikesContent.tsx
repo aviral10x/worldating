@@ -107,6 +107,44 @@ export const LikesContent = () => {
         return;
       }
 
+      // 4) Record the like so your profile shows on their Likes tab
+      try {
+        const bearer = typeof window !== "undefined" ? localStorage.getItem("bearer_token") : null;
+        const worldAddrRaw = typeof window !== "undefined" ? localStorage.getItem("world_address") : null;
+        const headers: HeadersInit = { "Content-Type": "application/json" };
+        if (bearer) headers["Authorization"] = `Bearer ${bearer}`;
+
+        let likerId: number | null = null;
+        const worldAddress = worldAddrRaw ? worldAddrRaw.toLowerCase() : null;
+        if (worldAddress) {
+          const meRes = await fetch(`/api/users/by-world?address=${encodeURIComponent(worldAddress)}`, { headers });
+          if (meRes.ok) {
+            const meJson = await meRes.json();
+            likerId = meJson?.id ?? meJson?.user?.id ?? null;
+          }
+        }
+        if (!likerId) {
+          const lsId = typeof window !== "undefined" ? Number(localStorage.getItem("user_id")) : NaN;
+          likerId = Number.isFinite(lsId) && lsId > 0 ? lsId : null;
+        }
+
+        if (likerId) {
+          const likeRes = await fetch("/api/likes", {
+            method: "POST",
+            headers,
+            body: JSON.stringify({ likerId, likedId: p.id }),
+          });
+          // Best-effort; even if already liked, API returns 200
+          if (!likeRes.ok) {
+            // Soft warning, but do not fail the flow as payment already succeeded
+            // We avoid toast.error here to prevent noisy UX
+            // console.warn('Failed to record like');
+          }
+        }
+      } catch (_) {
+        // Swallow errors to avoid blocking UX after a successful payment confirmation
+      }
+
       toast.success("Payment confirmed ✅");
     } catch (e: any) {
       toast.dismiss();
